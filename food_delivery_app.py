@@ -45,6 +45,38 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     h1, h2, h3, h4, h5, h6 { font-family: 'Playfair Display', serif !important; letter-spacing: 0.2px; }
 
+    /* ---------- Streamlit's own top toolbar: make it blend with dark theme ---------- */
+    header[data-testid="stHeader"] {
+        background: #0a0910 !important;
+        box-shadow: none !important;
+        border-bottom: 1px solid rgba(205,168,106,0.12);
+    }
+    header[data-testid="stHeader"] * { color: var(--text) !important; fill: var(--text) !important; }
+    div[data-testid="stToolbar"] { color: var(--text) !important; }
+    div[data-testid="stDecoration"] { background: linear-gradient(90deg, var(--gold-deep), var(--gold-light), var(--gold-deep)) !important; }
+    #MainMenu { color: var(--text) !important; }
+
+    /* Give enough clearance below the fixed header so nothing hides behind it */
+    .block-container { padding-top: 5.5rem !important; max-width: 1200px; position: relative; z-index: 1; }
+
+    /* ---------- Floating decorative food icons in the empty side gutters ---------- */
+    .food-float {
+        position: fixed; top: 0; height: 100vh; width: 90px;
+        pointer-events: none; z-index: 0; overflow: hidden;
+    }
+    .food-float.left { left: 0; }
+    .food-float.right { right: 0; }
+    .food-float span {
+        position: absolute; font-size: 1.9rem; opacity: 0.16;
+        filter: grayscale(15%) drop-shadow(0 0 6px rgba(205,168,106,0.25));
+        animation: floatY 9s ease-in-out infinite;
+    }
+    @keyframes floatY {
+        0%   { transform: translateY(0px) rotate(-4deg); }
+        50%  { transform: translateY(-26px) rotate(4deg); }
+        100% { transform: translateY(0px) rotate(-4deg); }
+    }
+
     /* ---------- App background ---------- */
     .stApp {
         background:
@@ -54,7 +86,6 @@ st.markdown("""
         color: var(--text) !important;
     }
     h1, h2, h3, h4, h5, h6, p, span, label, div { color: var(--text); }
-    .block-container { padding-top: 1.6rem; max-width: 1200px; }
 
     ::selection { background: rgba(205,168,106,0.35); }
 
@@ -270,6 +301,28 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
+# DECORATIVE FLOATING FOOD ICONS (left / right gutters)
+# ============================================================
+st.markdown("""
+    <div class="food-float left">
+        <span style="left:10px; top:8%; animation-delay:0s;">🍲</span>
+        <span style="left:35px; top:24%; animation-delay:1.2s; font-size:1.5rem;">🥗</span>
+        <span style="left:5px; top:42%; animation-delay:2.4s;">🍜</span>
+        <span style="left:38px; top:60%; animation-delay:0.6s; font-size:1.6rem;">🥘</span>
+        <span style="left:8px; top:78%; animation-delay:1.8s;">🍰</span>
+        <span style="left:32px; top:92%; animation-delay:3s; font-size:1.4rem;">🍹</span>
+    </div>
+    <div class="food-float right">
+        <span style="right:12px; top:12%; animation-delay:0.9s;">🍛</span>
+        <span style="right:38px; top:30%; animation-delay:2.1s; font-size:1.5rem;">🧁</span>
+        <span style="right:8px; top:48%; animation-delay:0.3s;">🥙</span>
+        <span style="right:35px; top:66%; animation-delay:1.5s; font-size:1.6rem;">🍹</span>
+        <span style="right:10px; top:84%; animation-delay:2.7s;">🍩</span>
+        <span style="right:30px; top:6%; animation-delay:3.3s; font-size:1.3rem;">☕</span>
+    </div>
+""", unsafe_allow_html=True)
+
+# ============================================================
 # SESSION STATE
 # ============================================================
 if "local_orders" not in st.session_state:
@@ -317,15 +370,19 @@ def send_automated_sms(phone, message):
     except Exception as e:
         print(f"WhatsApp automation error: {e}")
 
+# Menu categories — shown as tabs on the storefront and as a dropdown in the admin panel
+CATEGORIES = ["Breakfast", "Lunch", "Dinner", "Desserts", "Cold Drinks"]
+CATEGORY_ICONS = {"Breakfast": "🍳", "Lunch": "🍛", "Dinner": "🍽️", "Desserts": "🍰", "Cold Drinks": "🥤"}
+
 DEMO_MENU = [
     {"id": 1, "item_name": "Special Chicken Biryani", "price": 350, "cost_price": 220,
-     "description": "Ghar ke masalon se bani lazeez biryani", "is_available": True,
+     "description": "Ghar ke masalon se bani lazeez biryani", "is_available": True, "category": "Lunch",
      "image_url": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=500"},
     {"id": 2, "item_name": "Aloo Keema & Roti", "price": 280, "cost_price": 160,
-     "description": "Fresh minced meat with soft homemade chapatis", "is_available": True,
+     "description": "Fresh minced meat with soft homemade chapatis", "is_available": True, "category": "Dinner",
      "image_url": "https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=500"},
     {"id": 3, "item_name": "Daal Chawal Desi Ghee", "price": 200, "cost_price": 110,
-     "description": "Ultimate comfort food cooked with pure desi ghee", "is_available": True,
+     "description": "Ultimate comfort food cooked with pure desi ghee", "is_available": True, "category": "Lunch",
      "image_url": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=500"},
 ]
 
@@ -444,9 +501,8 @@ if portal_mode == "🍽️ Customer Storefront":
 
     with col_grid:
         st.markdown('<div class="section-label">📋 Today\'s Fresh Menu</div>', unsafe_allow_html=True)
-        if not menu_items:
-            st.info("No dishes match your search.")
-        for item in menu_items:
+
+        def render_dish_card(item):
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
             cols = st.columns([1, 2])
             with cols[0]:
@@ -464,6 +520,23 @@ if portal_mode == "🍽️ Customer Storefront":
                 elif item["id"] in st.session_state.cart:
                     del st.session_state.cart[item["id"]]
             st.markdown('</div>', unsafe_allow_html=True)
+
+        cat_labels = ["✨ All"] + [f"{CATEGORY_ICONS.get(c, '🍴')} {c}" for c in CATEGORIES]
+        cat_tabs = st.tabs(cat_labels)
+
+        with cat_tabs[0]:
+            if not menu_items:
+                st.info("No dishes match your search.")
+            for item in menu_items:
+                render_dish_card(item)
+
+        for i, cat in enumerate(CATEGORIES, start=1):
+            with cat_tabs[i]:
+                cat_items = [m for m in menu_items if m.get("category", "Lunch") == cat]
+                if not cat_items:
+                    st.info(f"No dishes listed under {cat} yet.")
+                for item in cat_items:
+                    render_dish_card(item)
 
     with col_checkout:
         st.markdown('<div class="section-label">🛒 Order Summary</div>', unsafe_allow_html=True)
@@ -575,6 +648,7 @@ elif portal_mode == "🔐 Admin Management Panel":
                 with c1:
                     new_name = st.text_input("Food Item Name *")
                     new_price = st.number_input("Selling Price (Rs.) *", min_value=0, step=10)
+                    new_category = st.selectbox("Category * (decides which tab it shows under)", CATEGORIES)
                 with c2:
                     new_cost = st.number_input("Cost Price (Rs.) — what it costs you to make *", min_value=0, step=10)
                     new_img = st.text_input("Image URL")
@@ -592,17 +666,25 @@ elif portal_mode == "🔐 Admin Management Panel":
                     else:
                         payload = {
                             "item_name": new_name, "price": new_price, "cost_price": new_cost,
-                            "description": new_desc, "image_url": new_img, "is_available": True
+                            "description": new_desc, "image_url": new_img, "is_available": True,
+                            "category": new_category
                         }
                         if supabase:
                             try:
                                 supabase.table("menu_items").insert(payload).execute()
-                                st.success(f"✅ '{new_name}' added and is now live!")
+                                st.success(f"✅ '{new_name}' added under {new_category} and is now live!")
                                 get_menu_items.clear()
                             except Exception as e:
-                                st.error(f"Failed to add menu item: {e}")
+                                # Older tables may not have a "category" column yet — retry without it
+                                try:
+                                    payload.pop("category", None)
+                                    supabase.table("menu_items").insert(payload).execute()
+                                    st.success(f"✅ '{new_name}' added and is now live! (Run the updated schema to enable categories.)")
+                                    get_menu_items.clear()
+                                except Exception as e2:
+                                    st.error(f"Failed to add menu item: {e2}")
                         else:
-                            st.success(f"✅ '{new_name}' added in Demo mode!")
+                            st.success(f"✅ '{new_name}' added under {new_category} in Demo mode!")
 
             st.markdown("---")
             st.markdown('<div class="section-label">Current Menu</div>', unsafe_allow_html=True)
@@ -610,7 +692,8 @@ elif portal_mode == "🔐 Admin Management Panel":
             for item in all_items:
                 st.markdown('<div class="menu-card" style="padding:12px 18px;margin-bottom:10px;">', unsafe_allow_html=True)
                 cols = st.columns([3, 1.2, 1.2, 1, 1])
-                cols[0].write(f"**{item['item_name']}**")
+                cat_icon = CATEGORY_ICONS.get(item.get("category", "Lunch"), "🍴")
+                cols[0].write(f"**{item['item_name']}**  \n{cat_icon} {item.get('category', 'Lunch')}")
                 cols[1].write(f"Price: {fmt(item.get('price', 0))}")
                 cols[2].write(f"Cost: {fmt(item.get('cost_price', 0))}")
                 is_avail = item.get("is_available", True)

@@ -225,16 +225,49 @@ st.markdown("""
         box-shadow: none !important;
     }
 
-    /* ---------- Inputs ---------- */
-    .stTextInput input, .stTextArea textarea, .stNumberInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
-        color: var(--text) !important;
-        background-color: rgba(255,255,255,0.05) !important;
+    /* ---------- Inputs (kept solid white with dark text for guaranteed readability
+         across Streamlit versions — broad selectors so nothing slips through) ---------- */
+    input[type="text"], input[type="number"], input[type="password"],
+    textarea,
+    .stTextInput input, .stTextArea textarea, .stNumberInput input, .stDateInput input,
+    div[data-baseweb="input"] input, div[data-baseweb="textarea"] textarea,
+    div[data-baseweb="base-input"] input {
+        color: #14120f !important;
+        background-color: #ffffff !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 8px !important;
+        caret-color: #14120f !important;
+    }
+    input::placeholder, textarea::placeholder { color: #8a8378 !important; opacity: 1 !important; }
+    .stTextInput input:focus, .stTextArea textarea:focus, .stNumberInput input:focus {
+        border-color: var(--gold) !important; box-shadow: 0 0 0 1px var(--gold) !important;
+    }
+
+    /* Selectbox / dropdown — closed control */
+    .stSelectbox div[data-baseweb="select"] > div,
+    div[data-baseweb="select"] > div {
+        color: #14120f !important;
+        background-color: #ffffff !important;
         border: 1px solid var(--line) !important;
         border-radius: 8px !important;
     }
-    .stTextInput input:focus, .stTextArea textarea:focus {
-        border-color: var(--gold) !important; box-shadow: 0 0 0 1px var(--gold) !important;
+    .stSelectbox div[data-baseweb="select"] * { color: #14120f !important; fill: #14120f !important; }
+
+    /* Selectbox open dropdown list (rendered in a portal, needs its own rule) */
+    div[data-baseweb="popover"] ul[role="listbox"],
+    div[data-baseweb="menu"] {
+        background-color: #ffffff !important;
     }
+    div[data-baseweb="popover"] ul[role="listbox"] li,
+    div[data-baseweb="menu"] li,
+    div[data-baseweb="popover"] li * {
+        color: #14120f !important;
+        background-color: #ffffff !important;
+    }
+    div[data-baseweb="popover"] li:hover {
+        background-color: rgba(205,168,106,0.18) !important;
+    }
+
     label p { color: var(--text-dim) !important; font-size:0.83rem !important; font-weight:600 !important; }
 
     /* ---------- KPI metric cards ---------- */
@@ -521,22 +554,24 @@ if portal_mode == "🍽️ Customer Storefront":
                     del st.session_state.cart[item["id"]]
             st.markdown('</div>', unsafe_allow_html=True)
 
-        cat_labels = ["✨ All"] + [f"{CATEGORY_ICONS.get(c, '🍴')} {c}" for c in CATEGORIES]
-        cat_tabs = st.tabs(cat_labels)
+        # Category filter — a single set of cards/widgets is rendered per run
+        # (never duplicated across categories), so there's no risk of duplicate
+        # widget keys or the cart quantity getting out of sync.
+        cat_options = ["✨ All"] + [f"{CATEGORY_ICONS.get(c, '🍴')} {c}" for c in CATEGORIES]
+        cat_choice = st.radio(
+            "Category filter", cat_options, horizontal=True, label_visibility="collapsed", key="menu_category_filter"
+        )
 
-        with cat_tabs[0]:
-            if not menu_items:
-                st.info("No dishes match your search.")
-            for item in menu_items:
-                render_dish_card(item)
+        if cat_choice == "✨ All":
+            filtered_menu = menu_items
+        else:
+            chosen_cat = cat_choice.split(" ", 1)[1]
+            filtered_menu = [m for m in menu_items if m.get("category", "Lunch") == chosen_cat]
 
-        for i, cat in enumerate(CATEGORIES, start=1):
-            with cat_tabs[i]:
-                cat_items = [m for m in menu_items if m.get("category", "Lunch") == cat]
-                if not cat_items:
-                    st.info(f"No dishes listed under {cat} yet.")
-                for item in cat_items:
-                    render_dish_card(item)
+        if not filtered_menu:
+            st.info("No dishes match your search." if search_term else f"No dishes listed under this category yet.")
+        for item in filtered_menu:
+            render_dish_card(item)
 
     with col_checkout:
         st.markdown('<div class="section-label">🛒 Order Summary</div>', unsafe_allow_html=True)

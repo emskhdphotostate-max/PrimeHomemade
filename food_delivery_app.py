@@ -1,42 +1,33 @@
 import streamlit as st
 import urllib.parse
-import urllib.request
-import webbrowser
 import ast
 import json
 import re
 import os
+import base64
 import psycopg2
 from psycopg2.pool import ThreadedConnectionPool
 from datetime import datetime, date, timedelta
 import pandas as pd
 
+# Brand logo file — place your logo next to this script as "logo.png".
+# The navbar (and browser-tab icon) will use it automatically.
+_LOGO_PATH = "logo.png"
+_HAS_LOGO = os.path.exists(_LOGO_PATH)
+
 # ============================================================
 # NEON (POSTGRESQL) DATABASE CONFIGURATION
 # ============================================================
-# Apna Neon connection string yahan paste karo ya environment
-# variable `DATABASE_URL` set karo.  Agar dono nahi hain to
-# app demo mode mein chalega (sirf session mein orders store
-# honge — refresh pe loss).
+# Paste your Neon connection string here, or set the environment
+# variable `DATABASE_URL` (also accepted: `NEON_DB_URL`).
+# Without a valid connection the app runs in demo mode
+# (orders are kept only in the session and are lost on refresh).
 
 NEON_DATABASE_URL = (
     os.getenv("DATABASE_URL")
     or os.getenv("NEON_DB_URL")
     or "postgresql://neondb_owner:npg_9xpZCGBYQu8L@ep-shy-mountain-axtzsqb5-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 )
-
-# ============================================================
-# WHATSAPP CLOUD API CONFIGURATION (Meta)
-# ============================================================
-# Customer ko order accept/out-for-delivery/complete ki WhatsApp
-# notification bhejni hai to Meta WhatsApp Cloud API ke 2 secrets
-# channels/Secrets mein add karo:
-#   WHATSAPP_TOKEN    = "EAA...."
-#   WHATSAPP_PHONE_ID = "123456789012345"
-# Nahin configure karne par app sirf wa.me link kholta hai jo
-# aapke PC pe chalti hai, server par nahi (Streamlit Cloud).
-WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
-WHATSAPP_PHONE_ID = os.getenv("WHATSAPP_PHONE_ID", "")
 
 @st.cache_resource
 def get_db_pool():
@@ -128,7 +119,7 @@ def init_database():
     except Exception as exc:
         st.warning(f"Database init issue: {exc}")
 
-st.set_page_config(page_title="Homemade Kitchen | Order & Eat", layout="wide", page_icon="🍔", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Desi Kitchen Online | Order & Eat", layout="wide", page_icon=_LOGO_PATH if _HAS_LOGO else "🍔", initial_sidebar_state="collapsed")
 
 # ============================================================
 # CSS — DARK / YELLOW FOOD-DELIVERY APP THEME
@@ -236,6 +227,14 @@ st.markdown("""
     }
     .vip-brand .name { font-family:'Poppins', sans-serif; font-size: 1.35rem; font-weight:800; color: var(--yellow-light) !important; line-height:1.1; }
     .vip-brand .tag { font-size: 0.68rem; letter-spacing: 2.5px; text-transform: uppercase; color: var(--text-dim) !important; }
+
+    /* Brand logo image (replaces the smi emoji when a logo.png exists) */
+    .vip-brand .brand-logo-wrap { flex-shrink: 0; display:flex; align-items:center; }
+    .vip-brand .brand-logo {
+        width: 48px; height: 48px; border-radius: 14px; object-fit: contain;
+        background: var(--panel); padding: 5px;
+        box-shadow: 0 0 0 1px rgba(255,200,57,0.4), 0 6px 18px rgba(255,200,57,0.25);
+    }
 
     /* ---------- Hero banner (full-bleed photo hero, like "Enjoy Our Delicious Meal") ---------- */
     .hero-banner {
@@ -540,6 +539,7 @@ st.markdown("""
         .food-float { display: none; }
         .vip-brand .name { font-size: 1.1rem; }
         .vip-brand .mark { width: 38px; height: 38px; font-size: 18px; }
+        .vip-brand .brand-logo { width: 40px; height: 40px; }
         .hero-banner { padding: 30px 20px; border-radius: 18px; min-height: 260px; background-position: 70% center; }
         .hero-banner h1 { font-size: 1.75rem; }
         .hero-banner p { font-size: 0.85rem; }
@@ -651,48 +651,25 @@ def normalize_phone(phone):
         clean = "92" + clean
     return clean
 
-def send_whatsapp_api(phone, message):
-    """Send a real WhatsApp message via Meta Cloud API. Returns True on success."""
-    if not WHATSAPP_TOKEN or not WHATSAPP_PHONE_ID:
-        return False
-    url = f"https://graph.facebook.com/v21.0/{WHATSAPP_PHONE_ID}/messages"
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": normalize_phone(phone),
-        "type": "text",
-        "text": {"body": message},
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return resp.status == 200
-    except Exception:
-        return False
+def wa_link(phone, message):
+    """Build a wa.me deep link. When admin clicks it, WhatsApp opens on
+    their own browser/mobile with the customer's number + pre-filled text."""
+    return f"https://wa.me/{normalize_phone(phone)}?text={urllib.parse.quote(message)}"
 
-def send_automated_sms(phone, message):
-    """
-    Customer ko WhatsApp message bhejo.
-    Returns: 'sent' (Cloud API se gya), 'link' (wa.me link khula, sirf PC pe),
-             'failed'.
-    """
-    try:
-        if send_whatsapp_api(phone, message):
-            return "sent"
-        clean_phone = normalize_phone(phone)
-        encoded_msg = urllib.parse.quote(message)
-        webbrowser.open(f"https://wa.me/{clean_phone}?text={encoded_msg}")
-        return "link"
-    except Exception as exc:
-        print(f"WhatsApp automation error: {exc}")
-        return "failed"
+def brand_mark_html():
+    """Return HTML for the brand logo image, or the emoji box as fallback."""
+    if _HAS_LOGO:
+        try:
+            with open(_LOGO_PATH, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+            return (
+                '<div class="brand-logo-wrap">'
+                f'<img class="brand-logo" src="data:image/png;base64,{b64}" alt="logo"/>'
+                "</div>"
+            )
+        except Exception:
+            pass
+    return '<div class="mark">🍔</div>'
 
 # Menu categories — shown as tabs on the storefront and as a dropdown in the admin panel
 CATEGORIES = ["Breakfast", "Lunch", "Dinner", "Desserts", "Cold Drinks"]
@@ -700,13 +677,13 @@ CATEGORY_ICONS = {"Breakfast": "🍳", "Lunch": "🍛", "Dinner": "🍽️", "De
 
 DEMO_MENU = [
     {"id": 1, "item_name": "Special Chicken Biryani", "price": 350, "cost_price": 220,
-     "description": "Ghar ke masalon se bani lazeez biryani", "is_available": True, "category": "Lunch",
+     "description": "Fragrant biryani cooked with home-ground spices, fresh chicken & long-grain rice", "is_available": True, "category": "Lunch",
      "image_url": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=500"},
     {"id": 2, "item_name": "Aloo Keema & Roti", "price": 280, "cost_price": 160,
      "description": "Fresh minced meat with soft homemade chapatis", "is_available": True, "category": "Dinner",
      "image_url": "https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=500"},
     {"id": 3, "item_name": "Daal Chawal Desi Ghee", "price": 200, "cost_price": 110,
-     "description": "Ultimate comfort food cooked with pure desi ghee", "is_available": True, "category": "Lunch",
+     "description": "Ultimate comfort food — creamy lentils and rice cooked with pure clarified butter", "is_available": True, "category": "Lunch",
      "image_url": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=500"},
 ]
 
@@ -806,12 +783,12 @@ def compute_analytics(orders, menu_lookup_cost):
 # ============================================================
 nav_left, nav_right = st.columns([2, 2])
 with nav_left:
-    st.markdown("""
+    st.markdown(f"""
         <div class="vip-brand" style="padding-top:6px;">
-            <div class="mark">🍔</div>
+            {brand_mark_html()}
             <div>
-                <div class="name">Homemade Kitchen</div>
-                <div class="tag">Hungry? Order &amp; Eat.</div>
+                <div class="name">Desi Kitchen Online</div>
+                <div class="tag">Hath ka bana lazeez khana, ab ek click par.</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -942,7 +919,7 @@ if portal_mode == "🍽️ Customer Storefront":
                                 )
                                 saved_to_db = True
                             except Exception as exc:
-                                st.error(f"Order save nahi ho paya: {exc}")
+                                st.error(f"Order could not be saved: {exc}")
 
                         if not saved_to_db:
                             order_id_mock = 900000 + len(st.session_state.local_orders)
@@ -1080,8 +1057,6 @@ elif portal_mode == "🔐 Admin Management Panel":
         # ---------------- TAB 2: LIVE ORDERS ----------------
         with tab2:
             st.markdown('<div class="section-label">Live Kitchen Orders</div>', unsafe_allow_html=True)
-            if not WHATSAPP_TOKEN:
-                st.caption("ℹ️ WhatsApp Cloud API configure nahi hai. Admin se Secrets mein `WHATSAPP_TOKEN` aur `WHATSAPP_PHONE_ID` add karein (Meta Dashboard se milein). Abhi sirf wa.me link khulta hai jo aapke device pe hi kaam karega.")
             search_q = st.text_input("🔍 Search by customer name or phone")
             orders = get_orders()
 
@@ -1114,43 +1089,47 @@ elif portal_mode == "🔐 Admin Management Panel":
                     </div>
                 """, unsafe_allow_html=True)
 
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3, col4, col5 = st.columns([1.2, 1.2, 1.2, 1, 2])
                 with col1:
                     if st.button("Accept & Prep 👨‍🍳", key=f"adm_prep_{scope}_{order_id}"):
                         update_order_status_db(order_id, "Preparing")
-                        msg = (f"Salam {c_name}! Aapka Order #{order_id} accept ho gaya hai aur tayyar ho raha hai. 😊\n\n"
-                               f"Items: {clean_items_str}\nTotal Amount: {fmt(total)}\n\n"
-                               f"🕒 Timings: Subha 9:00 AM se Raat 10:00 PM tak\n"
-                               f"Shukriya Homemade Kitchen se order karne ke liye!")
-                        result = send_automated_sms(phone, msg)
-                        if result == "sent":
-                            st.toast("💬 WhatsApp confirmation sent!")
-                            st.session_state.flash_success = f"Order #{order_id} accepted — confirmation sent to {c_name} on WhatsApp."
-                        else:
-                            st.session_state.flash_success = f"Order #{order_id} accepted. WhatsApp ka message aapne device se is order ke phone number par bhej dena."
+                        st.session_state.flash_success = f"Order #{order_id} marked as Preparing."
                         safe_rerun()
                 with col2:
                     if st.button("Out for Delivery 🚴", key=f"adm_del_{scope}_{order_id}"):
                         update_order_status_db(order_id, "Out for Delivery")
-                        msg = f"Salam {c_name}! Aapka Order #{order_id} out for delivery hai. Jald pohnch jayega. 🛵 Shukriya Homemade Kitchen!"
-                        result = send_automated_sms(phone, msg)
-                        st.session_state.flash_success = f"Order #{order_id} out for delivery." + (" 💬 Customer ko update sent." if result == "sent" else "")
+                        st.session_state.flash_success = f"Order #{order_id} marked as Out for Delivery."
                         safe_rerun()
                 with col3:
                     if st.button("Complete ✅", key=f"adm_comp_{scope}_{order_id}"):
                         update_order_status_db(order_id, "Completed")
-                        msg = f"Salam {c_name}! Aapka Order #{order_id} deliver ho chuka hai. 🍽️ Enjoy your meal! Shukriya Homemade Kitchen!"
-                        result = send_automated_sms(phone, msg)
-                        st.session_state.flash_success = f"Order #{order_id} completed." + (" 💬 Customer ko update sent." if result == "sent" else "")
+                        st.session_state.flash_success = f"Order #{order_id} completed."
                         safe_rerun()
                 with col4:
-                    if st.button("🗑️ Delete", key=f"adm_delord_{scope}_{order_id}"):
+                    if st.button("🗑️", key=f"adm_delord_{scope}_{order_id}"):
                         ok = delete_order_db(order_id)
                         if ok:
                             st.session_state.flash_success = f"Order #{order_id} deleted."
                         else:
                             st.session_state.flash_error = "Failed to delete order."
                         safe_rerun()
+                with col5:
+                    wa_msg = (
+                        f"Hello {c_name} from Desi Kitchen Online!\n\n"
+                        f"Order #{order_id} — {status}\n"
+                        f"Items: {clean_items_str}\n"
+                        f"Total: {fmt(total)}\n\n"
+                        "Thank you for ordering with us!"
+                    )
+                    href = wa_link(phone, wa_msg)
+                    st.markdown(
+                        f'<a href="{href}" target="_blank" rel="noopener" '
+                        f'style="display:inline-block;padding:6px 16px;background:#25D366;'
+                        f'color:#fff !important;border-radius:50px;font-weight:700;'
+                        f'text-decoration:none;font-size:0.82rem;white-space:nowrap;'
+                        f'margin-top:4px;">💬 WhatsApp</a>',
+                        unsafe_allow_html=True,
+                    )
                 st.divider()
 
             for idx, tab in enumerate(status_tabs[:4]):
@@ -1233,6 +1212,6 @@ elif portal_mode == "🔐 Admin Management Panel":
 
             st.markdown("---")
             st.caption(
-                "ℹ️ Orders aur menu items ab Neon (PostgreSQL) database mein save hote hain. "
-                "Saare orders refresh ke baad bhi yaad rehte hain."
+                "ℹ️ Orders and menu items are saved in the Neon (PostgreSQL) database. "
+                "All orders persist after page refresh."
             )

@@ -1,7 +1,10 @@
 import streamlit as st
 import urllib.parse
+import urllib.request
 import webbrowser
 import ast
+import json
+import re
 import os
 import psycopg2
 from psycopg2.pool import ThreadedConnectionPool
@@ -21,6 +24,19 @@ NEON_DATABASE_URL = (
     or os.getenv("NEON_DB_URL")
     or "postgresql://neondb_owner:npg_9xpZCGBYQu8L@ep-shy-mountain-axtzsqb5-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 )
+
+# ============================================================
+# WHATSAPP CLOUD API CONFIGURATION (Meta)
+# ============================================================
+# Customer ko order accept/out-for-delivery/complete ki WhatsApp
+# notification bhejni hai to Meta WhatsApp Cloud API ke 2 secrets
+# channels/Secrets mein add karo:
+#   WHATSAPP_TOKEN    = "EAA...."
+#   WHATSAPP_PHONE_ID = "123456789012345"
+# Nahin configure karne par app sirf wa.me link kholta hai jo
+# aapke PC pe chalti hai, server par nahi (Streamlit Cloud).
+WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
+WHATSAPP_PHONE_ID = os.getenv("WHATSAPP_PHONE_ID", "")
 
 @st.cache_resource
 def get_db_pool():
@@ -564,6 +580,14 @@ if "cart" not in st.session_state:
 if "admin_logged_in" not in st.session_state:
     st.session_state.admin_logged_in = False
 
+# One-time flash messages (show after a rerun, then auto-clear)
+for _flash_key in ("flash_success", "flash_error"):
+    if _flash_key in st.session_state:
+        if _flash_key == "flash_success":
+            st.success(st.session_state.pop(_flash_key))
+        else:
+            st.error(st.session_state.pop(_flash_key))
+
 # ============================================================
 # HELPERS
 # ============================================================
@@ -579,28 +603,87 @@ def safe_rerun():
     else:
         st.experimental_rerun()
 
+def _parse_items(items_raw):
+    """Parse cart stored as string (JSON or legacy python-dict repr) into a dict."""
+    if not isinstance(items_raw, str):
+        return items_raw or {}
+    cleaned = re.sub(r"Decimal\('([^']*)'\)", r"\1", items_raw, flags=re.I)
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        try:
+            return ast.literal_eval(cleaned)
+        except Exception:
+            return {}
+
 def format_order_items(items_raw):
     try:
-        items_dict = ast.literal_eval(items_raw) if isinstance(items_raw, str) else items_raw
+        items_dict = _parse_items(items_raw)
         formatted = []
         for _id, d in items_dict.items():
             name = d.get('name', 'Item')
             qty = d.get('quantity', 1)
-            price = d.get('price', 0)
-            formatted.append(f"{qty}x {name} (Rs. {price * qty})")
-        return ", ".join(formatted)
+            try:
+                price = float(d.get('price', 0) or 0)
+            except Exception:
+                price = 0
+            formatted.append(f"{qty}x {name} (Rs. {price * qty:,.0f})")
+        return ", ".join(formatted) if formatted else str(items_raw)
     except Exception:
         return str(items_raw)
 
-def send_automated_sms(phone, message):
+def normalize_phone(phone):
+    clean = str(phone or "").strip().replace("+", "").replace(" ", "").replace("-", "")
+    if clean.startswith("00"):
+        clean = clean[2:]
+    if clean.startswith("0"):
+        clean = "92" + clean[1:]
+    if not clean.startswith("92"):
+        clean = "92" + clean
+    return clean
+
+def send_whatsapp_api(phone, message):
+    """Send a real WhatsApp message via Meta Cloud API. Returns True on success."""
+    if not WHATSAPP_TOKEN or not WHATSAPP_PHONE_ID:
+        return False
+    url = f"https://graph.facebook.com/v21.0/{WHATSAPP_PHONE_ID}/messages"
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": normalize_phone(phone),
+        "type": "text",
+        "text": {"body": message},
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
     try:
-        clean_phone = phone.strip().replace("+", "").replace(" ", "")
-        if clean_phone.startswith("0"):
-            clean_phone = "92" + clean_phone[1:]
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+def send_automated_sms(phone, message):
+    """
+    Customer ko WhatsApp message bhejo.
+    Returns: 'sent' (Cloud API se gya), 'link' (wa.me link khula, sirf PC pe),
+             'failed'.
+    """
+    try:
+        if send_whatsapp_api(phone, message):
+            return "sent"
+        clean_phone = normalize_phone(phone)
         encoded_msg = urllib.parse.quote(message)
         webbrowser.open(f"https://wa.me/{clean_phone}?text={encoded_msg}")
-    except Exception as e:
-        print(f"WhatsApp automation error: {e}")
+        return "link"
+    except Exception as exc:
+        print(f"WhatsApp automation error: {exc}")
+        return "failed"
 
 # Menu categories — shown as tabs on the storefront and as a dropdown in the admin panel
 CATEGORIES = ["Breakfast", "Lunch", "Dinner", "Desserts", "Cold Drinks"]
@@ -682,10 +765,7 @@ def delete_order_db(order_id):
 def compute_analytics(orders, menu_lookup_cost):
     rows = []
     for o in orders:
-        try:
-            items_dict = ast.literal_eval(o["items"]) if isinstance(o.get("items"), str) else (o.get("items") or {})
-        except Exception:
-            items_dict = {}
+        items_dict = _parse_items(o.get("items"))
         cost = 0
         for item_id, d in items_dict.items():
             try:
@@ -777,7 +857,7 @@ if portal_mode == "🍽️ Customer Storefront":
                     qty = st.number_input("Quantity", 0, 10, 0, key=f"item_qty_{item['id']}", label_visibility="collapsed")
                 if qty > 0:
                     st.session_state.cart[item["id"]] = {
-                        "name": item["item_name"], "price": item["price"], "quantity": qty
+                        "name": item["item_name"], "price": float(item["price"]), "quantity": qty
                     }
                 elif item["id"] in st.session_state.cart:
                     del st.session_state.cart[item["id"]]
@@ -838,7 +918,7 @@ if portal_mode == "🍽️ Customer Storefront":
                         st.error("Please fill all delivery details!")
                     else:
                         order_time = datetime.now().isoformat()
-                        items_str = str(st.session_state.cart)
+                        items_str = json.dumps(st.session_state.cart)
                         saved_to_db = False
 
                         if get_db_pool() is not None:
@@ -864,7 +944,11 @@ if portal_mode == "🍽️ Customer Storefront":
                             st.session_state.local_orders.insert(0, new_order)
 
                         mode_label = "saved to database" if saved_to_db else "demo mode (connect Neon DB for persistence)"
-                        st.success(f"🎉 Order placed successfully! Kitchen notified. ({mode_label})")
+                        st.toast("🎉 Order placed!")
+                        for _k in list(st.session_state.keys()):
+                            if _k.startswith("item_qty_"):
+                                del st.session_state[_k]
+                        st.session_state.flash_success = f"🎉 Order placed successfully! Kitchen notified. ({mode_label})"
                         st.session_state.cart = {}
                         safe_rerun()
 
@@ -887,7 +971,7 @@ elif portal_mode == "🔐 Admin Management Panel":
             if login_btn:
                 if username == "admin" and password == "123":
                     st.session_state.admin_logged_in = True
-                    st.success("Login successful!")
+                    st.session_state.flash_success = "Login successful!"
                     safe_rerun()
                 else:
                     st.error("Invalid Username or Password!")
@@ -986,6 +1070,8 @@ elif portal_mode == "🔐 Admin Management Panel":
         # ---------------- TAB 2: LIVE ORDERS ----------------
         with tab2:
             st.markdown('<div class="section-label">Live Kitchen Orders</div>', unsafe_allow_html=True)
+            if not WHATSAPP_TOKEN:
+                st.caption("ℹ️ WhatsApp Cloud API configure nahi hai. Admin se Secrets mein `WHATSAPP_TOKEN` aur `WHATSAPP_PHONE_ID` add karein (Meta Dashboard se milein). Abhi sirf wa.me link khulta hai jo aapke device pe hi kaam karega.")
             search_q = st.text_input("🔍 Search by customer name or phone")
             orders = get_orders()
 
@@ -1022,31 +1108,38 @@ elif portal_mode == "🔐 Admin Management Panel":
                 with col1:
                     if st.button("Accept & Prep 👨‍🍳", key=f"adm_prep_{scope}_{order_id}"):
                         update_order_status_db(order_id, "Preparing")
-                        msg = (f"Salam {c_name}! Aapka Order #{order_id} accept ho gaya hai aur tayyar ho raha hai.\n\n"
+                        msg = (f"Salam {c_name}! Aapka Order #{order_id} accept ho gaya hai aur tayyar ho raha hai. 😊\n\n"
                                f"Items: {clean_items_str}\nTotal Amount: {fmt(total)}\n\n"
-                               f"🕒 Timings: Subha 9:00 AM se Raat 10:00 PM tak\nShukriya Homemade Kitchen se order karne ke liye!")
-                        send_automated_sms(phone, msg)
-                        st.success(f"Order #{order_id} accepted, WhatsApp message sent!")
+                               f"🕒 Timings: Subha 9:00 AM se Raat 10:00 PM tak\n"
+                               f"Shukriya Homemade Kitchen se order karne ke liye!")
+                        result = send_automated_sms(phone, msg)
+                        if result == "sent":
+                            st.toast("💬 WhatsApp confirmation sent!")
+                            st.session_state.flash_success = f"Order #{order_id} accepted — confirmation sent to {c_name} on WhatsApp."
+                        else:
+                            st.session_state.flash_success = f"Order #{order_id} accepted. WhatsApp ka message aapne device se is order ke phone number par bhej dena."
                         safe_rerun()
                 with col2:
                     if st.button("Out for Delivery 🚴", key=f"adm_del_{scope}_{order_id}"):
                         update_order_status_db(order_id, "Out for Delivery")
-                        msg = f"Salam {c_name}! Aapka Order #{order_id} out for delivery hai. Jald pohnch jayega. Shukriya!"
-                        send_automated_sms(phone, msg)
+                        msg = f"Salam {c_name}! Aapka Order #{order_id} out for delivery hai. Jald pohnch jayega. 🛵 Shukriya Homemade Kitchen!"
+                        result = send_automated_sms(phone, msg)
+                        st.session_state.flash_success = f"Order #{order_id} out for delivery." + (" 💬 Customer ko update sent." if result == "sent" else "")
                         safe_rerun()
                 with col3:
                     if st.button("Complete ✅", key=f"adm_comp_{scope}_{order_id}"):
                         update_order_status_db(order_id, "Completed")
-                        msg = f"Salam {c_name}! Aapka Order #{order_id} deliver ho chuka hai. Enjoy your meal! 🍽️"
-                        send_automated_sms(phone, msg)
+                        msg = f"Salam {c_name}! Aapka Order #{order_id} deliver ho chuka hai. 🍽️ Enjoy your meal! Shukriya Homemade Kitchen!"
+                        result = send_automated_sms(phone, msg)
+                        st.session_state.flash_success = f"Order #{order_id} completed." + (" 💬 Customer ko update sent." if result == "sent" else "")
                         safe_rerun()
                 with col4:
                     if st.button("🗑️ Delete", key=f"adm_delord_{scope}_{order_id}"):
                         ok = delete_order_db(order_id)
                         if ok:
-                            st.success(f"Order #{order_id} deleted.")
+                            st.session_state.flash_success = f"Order #{order_id} deleted."
                         else:
-                            st.error("Failed to delete order.")
+                            st.session_state.flash_error = "Failed to delete order."
                         safe_rerun()
                 st.divider()
 

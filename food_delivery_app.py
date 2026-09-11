@@ -225,7 +225,14 @@ st.markdown("""
         color: var(--ink) !important; font-size: 21px; font-weight:800;
         box-shadow: 0 0 0 1px rgba(255,200,57,0.4), 0 6px 18px rgba(255,200,57,0.25);
     }
-    .vip-brand .name { font-family:'Poppins', sans-serif; font-size: 1.35rem; font-weight:800; color: var(--yellow-light) !important; line-height:1.1; }
+    .vip-brand .name {
+        font-family:'Poppins', sans-serif; font-size: 1.35rem; font-weight:800; line-height:1.1;
+        background: linear-gradient(90deg, var(--yellow-light), #fff6d8 40%, var(--yellow-deep) 70%, var(--yellow-light));
+        background-size: 300% auto;
+        -webkit-background-clip: text; background-clip: text;
+        -webkit-text-fill-color: transparent; color: var(--yellow-light);
+        animation: brandShine 7s linear infinite;
+    }
     .vip-brand .tag { font-size: 0.68rem; letter-spacing: 2.5px; text-transform: uppercase; color: var(--text-dim) !important; }
 
     /* Brand logo image (replaces the smi emoji when a logo.png exists) */
@@ -527,6 +534,117 @@ st.markdown("""
     }
     [data-testid="stToast"] svg { fill: var(--yellow) !important; }
 
+    /* ============================================================
+       PREMIUM / VIP ANIMATION LAYER
+       ============================================================ */
+
+    /* Animated ambient background — slow drifting colour orbs */
+    .bg-layer { position: fixed; top:0; left:0; right:0; bottom:0; z-index: 0; overflow:hidden; pointer-events: none; }
+    .bg-orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity:.55; will-change: transform; }
+    .bg-orb.o1 { width:46vw; height:46vw; left:-14vw; top:-16vw; background: radial-gradient(circle, rgba(255,200,57,.18), transparent 62%); animation: drift1 30s ease-in-out infinite alternate; }
+    .bg-orb.o2 { width:40vw; height:40vw; right:-16vw; top:4vh; background: radial-gradient(circle, rgba(77,163,255,.16), transparent 62%); animation: drift2 36s ease-in-out infinite alternate; }
+    .bg-orb.o3 { width:36vw; height:36vw; left:20vw; bottom:-18vw; background: radial-gradient(circle, rgba(245,166,35,.14), transparent 62%); animation: drift3 42s ease-in-out infinite alternate; }
+    @keyframes drift1 { from { transform: translate(0,0); } to { transform: translate(9vw, 7vh); } }
+    @keyframes drift2 { from { transform: translate(0,0); } to { transform: translate(-8vw, 10vh); } }
+    @keyframes drift3 { from { transform: translate(0,0); } to { transform: translate(7vw, -8vh); } }
+
+    /* Slow Ken Burns pan on the gutter food photographs */
+    .food-float.left  { animation: panLeft 44s ease-in-out infinite alternate; }
+    .food-float.right { animation: panRight 50s ease-in-out infinite alternate; }
+    @keyframes panLeft  { from { background-position: 0% 15%; } to { background-position: 0% 85%; } }
+    @keyframes panRight { from { background-position: 0% 85%; } to { background-position: 0% 15%; } }
+
+    /* Hero: slow zoom + sweeping light sheen + floating garnish emojis */
+    .hero-banner { animation: heroZoom 34s ease-in-out infinite alternate; }
+    @keyframes heroZoom { from { background-size: 116% auto; } to { background-size: 100% auto; } }
+    .hero-banner::after {
+        content: ""; position:absolute; inset:0; pointer-events:none;
+        background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,.07) 48%, transparent 60%);
+        background-size: 250% 100%;
+        animation: sheen 7s linear infinite;
+    }
+    @keyframes sheen { from { background-position: 125% 0; } to { background-position: -125% 0; } }
+    .hero-banner h1, .hero-banner p, .hero-eyebrow, .hero-cta, .hero-trust { position: relative; z-index: 1; }
+
+    .hero-float-f { position:absolute; pointer-events:none; filter: drop-shadow(0 8px 12px rgba(0,0,0,.45)); animation: floaty 6.5s ease-in-out infinite; opacity:.9; }
+    .hero-float-f.e1 { right:11%; top:20%; font-size:2.2rem; }
+    .hero-float-f.e2 { right:27%; bottom:24%; font-size:1.7rem; animation-delay:1.5s; }
+    .hero-float-f.e3 { right:5%;  top:60%;  font-size:1.5rem; animation-delay:2.8s; }
+    @keyframes floaty { 0%,100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-16px) rotate(5deg); } }
+
+    /* Hero trust strip */
+    .hero-trust { display:flex; gap:10px; margin-top:20px; flex-wrap:wrap; position:relative; z-index:1; }
+    .hero-trust span {
+        font-size:.76rem; letter-spacing:.4px; color:#ccd1e2 !important; font-weight:600;
+        background: rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.1);
+        padding:7px 15px; border-radius:999px; backdrop-filter: blur(6px);
+    }
+
+    /* Announcement marquee bar */
+    .marquee-wrap {
+        overflow:hidden; border:1px solid var(--line); border-radius:999px;
+        background: linear-gradient(90deg, rgba(255,200,57,.10), rgba(77,163,255,.06), rgba(255,200,57,.10));
+        padding:9px 0; margin-bottom:20px;
+    }
+    .marquee-track { display:flex; width:max-content; animation: marquee 30s linear infinite; }
+    .marquee-track span {
+        font-size:.78rem; letter-spacing:1.4px; text-transform:uppercase; color:var(--text-dim);
+        white-space:nowrap; padding-right:56px; font-weight:600;
+    }
+    @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+    /* Card entrance + hover shine sweep */
+    .menu-card { position:relative; overflow:hidden; animation: fadeUp .4s ease both; }
+    @keyframes fadeUp { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform:none; } }
+    .menu-card::after {
+        content:""; position:absolute; top:0; bottom:0; left:-130%; width:55%;
+        background: linear-gradient(105deg, transparent, rgba(255,255,255,.07), transparent);
+        transition: left .65s ease; pointer-events:none;
+    }
+    .menu-card:hover::after { left: 145%; }
+    .menu-card img { transition: transform .45s ease; }
+    .menu-card:hover img { transform: scale(1.05); }
+
+    /* Price badge gentle shimmer */
+    .price-badge { position:relative; overflow:hidden; }
+    .price-badge::after {
+        content:""; position:absolute; top:0; bottom:0; left:-120%; width:45%;
+        background: linear-gradient(105deg, transparent, rgba(255,255,255,.28), transparent);
+        animation: badgeShimmer 3.2s ease-in-out infinite;
+    }
+    @keyframes badgeShimmer { 0%,60% { left:-120%; } 100% { left:140%; } }
+
+    /* Brand name animated gradient shine */
+    @keyframes brandShine { to { background-position: 300% center; } }
+    .vip-brand .brand-logo, .vip-brand .mark { transition: transform .28s ease; }
+    .vip-brand:hover .brand-logo, .vip-brand:hover .mark { transform: rotate(-6deg) scale(1.07); }
+
+    /* Primary buttons: shine sweep on hover */
+    .stButton button, div.stFormSubmitButton > button { position:relative; overflow:hidden; }
+    .stButton button::after, div.stFormSubmitButton > button::after {
+        content:""; position:absolute; top:0; bottom:0; left:-130%; width:45%;
+        background: linear-gradient(105deg, transparent, rgba(255,255,255,.35), transparent);
+        transition: left .6s ease; pointer-events:none;
+    }
+    .stButton button:hover::after, div.stFormSubmitButton > button:hover::after { left: 145%; }
+
+    /* New-order badge pulse */
+    .badge-new { animation: pulseBadge 2.2s ease-in-out infinite; }
+    @keyframes pulseBadge {
+        0%,100% { box-shadow: 0 0 0 0 rgba(255,200,57,0.45); }
+        50%     { box-shadow: 0 0 0 8px rgba(255,200,57,0); }
+    }
+
+    /* Polished scrollbar */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: #0a0d18; }
+    ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--yellow-deep), var(--yellow)); border-radius: 999px; border: 2px solid #0a0d18; }
+
+    /* Respect users who prefer less motion */
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; }
+    }
+
     /* ---------- General spacing polish ---------- */
     div[data-testid="stVerticalBlock"] { gap: 0.9rem; }
     .stTextInput, .stSelectbox, .stTextArea { margin-bottom: 2px; }
@@ -549,6 +667,9 @@ st.markdown("""
         div[data-testid="stButtonGroup"] [data-variant="pills"] { font-size: 0.78rem !important; padding: 6px 12px !important; }
         .menu-card { padding: 14px; border-radius: 16px; }
         div[data-testid="stMetric"] { padding: 12px 14px; }
+        .hero-float-f { display: none; }
+        .hero-trust span { font-size:.7rem; padding:6px 12px; }
+        .marquee-track span { font-size:.66rem; padding-right:34px; letter-spacing:1px; }
     }
     @media (max-width: 480px) {
         .hero-banner h1 { font-size: 1.5rem; }
@@ -560,6 +681,14 @@ st.markdown("""
 # ============================================================
 # DECORATIVE FLOATING FOOD ICONS (left / right gutters)
 # ============================================================
+st.markdown("""
+    <div class="bg-layer" aria-hidden="true">
+        <div class="bg-orb o1"></div>
+        <div class="bg-orb o2"></div>
+        <div class="bg-orb o3"></div>
+    </div>
+""", unsafe_allow_html=True)
+
 st.markdown("""
     <div class="food-float left">
         <span style="left:10px; top:8%; animation-delay:0s;">🍲</span>
@@ -801,16 +930,43 @@ with nav_right:
 st.markdown(f"<div style='text-align:right; margin-top:-8px;'><span class='stCaption'>📅 {datetime.now().strftime('%A, %d %b %Y')}</span></div>", unsafe_allow_html=True)
 st.markdown("<hr style='margin:14px 0 22px 0;'>", unsafe_allow_html=True)
 
+st.markdown("""
+    <div class="marquee-wrap">
+        <div class="marquee-track">
+            <span>🔥 50% OFF your first order</span>
+            <span>🚚 Free delivery within 30 minutes</span>
+            <span>⭐ 4.9 rated by local neighbours</span>
+            <span>🍛 100% freshly home-cooked</span>
+            <span>💛 New dishes added every week</span>
+            <span>⏰ Open daily 9 AM – 10 PM</span>
+            <span>🔥 50% OFF your first order</span>
+            <span>🚚 Free delivery within 30 minutes</span>
+            <span>⭐ 4.9 rated by local neighbours</span>
+            <span>🍛 100% freshly home-cooked</span>
+            <span>💛 New dishes added every week</span>
+            <span>⏰ Open daily 9 AM – 10 PM</span>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
+
 # ============================================================
 # 1. CUSTOMER STOREFRONT
 # ============================================================
 if portal_mode == "🍽️ Customer Storefront":
     st.markdown("""
         <div class="hero-banner">
+            <span class="hero-float-f e1">🍛</span>
+            <span class="hero-float-f e2">🌶️</span>
+            <span class="hero-float-f e3">🥘</span>
             <span class="hero-eyebrow">🔥 Chef's Special · 50% OFF first order</span>
-            <h1>Enjoy Our<br>Delicious Meal</h1>
+            <h1>Enjoy Our Delicious Meal</h1>
             <p>Fresh, hygienic, and authentic home-cooked meals — plated with care, delivered with pride.</p>
             <p>⏰ Open daily · 9:00 AM – 10:00 PM</p>
+            <div class="hero-trust">
+                <span>🚚 Free Delivery</span>
+                <span>⭐ 4.9 Rated</span>
+                <span>🥘 100% Home-Cooked</span>
+            </div>
             <a href="#" class="hero-cta" onclick="return false;">🍽️ Explore Menu</a>
         </div>
     """, unsafe_allow_html=True)

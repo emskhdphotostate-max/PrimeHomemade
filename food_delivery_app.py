@@ -109,29 +109,40 @@ st.markdown("""
     .vip-brand .name { font-family:'Poppins', sans-serif; font-size: 1.35rem; font-weight:800; color: var(--yellow-light) !important; line-height:1.1; }
     .vip-brand .tag { font-size: 0.68rem; letter-spacing: 2.5px; text-transform: uppercase; color: var(--text-dim) !important; }
 
-    /* ---------- Hero banner (bright yellow promo card, like "Hungry? Order & Eat") ---------- */
+    /* ---------- Hero banner (full-bleed photo hero, like "Enjoy Our Delicious Meal") ---------- */
     .hero-banner {
         position: relative; overflow:hidden;
         background:
-            radial-gradient(650px 280px at 85% -30%, rgba(255,255,255,0.25), transparent 60%),
-            linear-gradient(135deg, #FFDB77 0%, #FFC839 55%, #F5A623 100%);
-        border: none;
-        padding: 46px 32px;
+            linear-gradient(100deg, rgba(6,8,16,0.94) 0%, rgba(6,8,16,0.78) 42%, rgba(6,8,16,0.25) 68%, rgba(6,8,16,0.05) 100%),
+            url('https://images.unsplash.com/photo-1544025162-d76694265947?w=1400&q=80') center/cover no-repeat;
+        border: 1px solid var(--line);
+        padding: 64px 42px;
+        min-height: 340px;
         border-radius: 24px;
-        text-align: center;
+        text-align: left;
         margin-bottom: 30px;
-        box-shadow: 0 20px 50px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.08) inset;
+        display: flex; flex-direction: column; justify-content: center;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
     }
     .hero-eyebrow {
-        display:inline-block; font-size:0.7rem; letter-spacing:4px; text-transform:uppercase;
-        color: var(--ink) !important; opacity: 0.75; margin-bottom:10px; font-weight:700;
+        display:inline-block; font-size:0.72rem; letter-spacing:4px; text-transform:uppercase;
+        color: var(--yellow) !important; margin-bottom:12px; font-weight:800;
     }
     .hero-banner h1 {
-        font-size: 2.6rem; font-weight: 900; margin: 0 0 10px 0;
-        color: var(--ink) !important; -webkit-text-fill-color: var(--ink);
+        font-size: 3rem; line-height: 1.08; font-weight: 900; margin: 0 0 14px 0; max-width: 620px;
+        color: #ffffff !important; -webkit-text-fill-color: #ffffff;
     }
-    .hero-banner p { font-weight: 600; color: #3a2e08 !important; font-size:0.98rem; margin: 4px 0; }
-    .hero-divider { width:64px; height:3px; margin:16px auto; background: rgba(26,20,8,0.35); border-radius: 3px; }
+    .hero-banner p { font-weight: 500; color: #d7dae4 !important; font-size:1rem; margin: 4px 0; max-width: 560px; }
+    .hero-divider { display: none; }
+    .hero-cta {
+        display:inline-block; margin-top: 22px; width: fit-content;
+        background: linear-gradient(135deg, var(--yellow-light), var(--yellow-deep));
+        color: var(--ink) !important; font-weight: 800; letter-spacing:.3px;
+        padding: 13px 30px; border-radius: 999px; text-decoration:none !important;
+        box-shadow: 0 10px 24px rgba(255,200,57,0.35);
+        transition: transform .15s ease;
+    }
+    .hero-cta:hover { transform: translateY(-2px); }
 
     /* ---------- Section labels ---------- */
     .section-label {
@@ -384,9 +395,10 @@ st.markdown("""
         .food-float { display: none; }
         .vip-brand .name { font-size: 1.1rem; }
         .vip-brand .mark { width: 38px; height: 38px; font-size: 18px; }
-        .hero-banner { padding: 30px 20px; border-radius: 18px; }
+        .hero-banner { padding: 30px 20px; border-radius: 18px; min-height: 260px; background-position: 70% center; }
         .hero-banner h1 { font-size: 1.75rem; }
         .hero-banner p { font-size: 0.85rem; }
+        .hero-cta { padding: 10px 22px; font-size: 0.85rem; }
         .section-label { font-size: 1.15rem; }
         div[data-testid="stButtonGroup"] > div:last-child { width: 100%; justify-content: center; }
         div[data-testid="stButtonGroup"] [data-variant="pills"] { font-size: 0.78rem !important; padding: 6px 12px !important; }
@@ -580,11 +592,11 @@ st.markdown("<hr style='margin:14px 0 22px 0;'>", unsafe_allow_html=True)
 if portal_mode == "🍽️ Customer Storefront":
     st.markdown("""
         <div class="hero-banner">
-            <span class="hero-eyebrow">🔥 50% OFF your first order</span>
-            <h1>Hungry? Order &amp; Eat.</h1>
-            <div class="hero-divider"></div>
+            <span class="hero-eyebrow">🔥 Chef's Special · 50% OFF first order</span>
+            <h1>Enjoy Our<br>Delicious Meal</h1>
             <p>Fresh, hygienic, and authentic home-cooked meals — plated with care, delivered with pride.</p>
             <p>⏰ Open daily · 9:00 AM – 10:00 PM</p>
+            <a href="#" class="hero-cta" onclick="return false;">🍽️ Explore Menu</a>
         </div>
     """, unsafe_allow_html=True)
 

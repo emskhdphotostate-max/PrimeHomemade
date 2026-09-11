@@ -1,27 +1,29 @@
 import streamlit as st
+from supabase import create_client, Client
 import urllib.parse
 import webbrowser
 import ast
 from datetime import datetime, date, timedelta
 import pandas as pd
-import psycopg2
-import psycopg2.extras
 
 # ============================================================
-# NEON DATABASE CONFIGURATION
+# SUPABASE CONFIGURATION
 # ============================================================
-NEON_CONN_STRING = st.secrets.get("NEON_CONN_STRING", "postgresql://user:password@host/dbname?sslmode=require")
+SUPABASE_URL = "YOUR_SUPABASE_URL"
+SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY"
 
-def get_db_connection():
-    try:
-        return psycopg2.connect(NEON_CONN_STRING)
-    except Exception as e:
+@st.cache_resource
+def init_supabase() -> Client:
+    if SUPABASE_URL == "YOUR_SUPABASE_URL":
         return None
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+supabase = init_supabase()
 
 st.set_page_config(page_title="Homemade Kitchen | Order & Eat", layout="wide", page_icon="🍔", initial_sidebar_state="collapsed")
 
 # ============================================================
-# CSS — DARK / YELLOW FOOD-DELIVERY APP THEME (FIXED)
+# CSS — DARK / YELLOW FOOD-DELIVERY APP THEME
 # ============================================================
 st.markdown("""
     <style>
@@ -45,6 +47,7 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     h1, h2, h3, h4, h5, h6 { font-family: 'Poppins', sans-serif !important; letter-spacing: 0.2px; }
 
+    /* ---------- Streamlit's own top toolbar: make it blend with dark theme ---------- */
     header[data-testid="stHeader"] {
         background: var(--navy) !important;
         box-shadow: none !important;
@@ -55,8 +58,48 @@ st.markdown("""
     div[data-testid="stDecoration"] { background: linear-gradient(90deg, var(--yellow-deep), var(--yellow-light), var(--yellow-deep)) !important; }
     #MainMenu { color: var(--text) !important; }
 
+    /* Give enough clearance below the fixed header so nothing hides behind it */
     .block-container { padding-top: 5.5rem !important; max-width: 1200px; position: relative; z-index: 1; }
 
+    /* ---------- Subtle food photography filling the empty side gutters (desktop only) ---------- */
+    .food-float {
+        position: fixed; top: 0; height: 100vh; width: 220px;
+        pointer-events: none; z-index: 0; overflow: hidden;
+        -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.9) 18%, rgba(0,0,0,0.9) 82%, transparent 100%);
+        mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.9) 18%, rgba(0,0,0,0.9) 82%, transparent 100%);
+    }
+    .food-float.left {
+        left: 0;
+        background: url('https://images.unsplash.com/photo-1516684465974-78661ba8165d?w=600&q=60&auto=format&fit=crop') center/cover no-repeat;
+        -webkit-mask-image:
+            linear-gradient(to right, black 0%, transparent 100%),
+            linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
+        -webkit-mask-composite: source-in;
+        mask-image:
+            linear-gradient(to right, black 0%, transparent 100%),
+            linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
+        mask-composite: intersect;
+    }
+    .food-float.right {
+        right: 0;
+        background: url('https://images.unsplash.com/photo-1526823127573-0fda76b6c24f?w=600&q=60&auto=format&fit=crop') center/cover no-repeat;
+        -webkit-mask-image:
+            linear-gradient(to left, black 0%, transparent 100%),
+            linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
+        -webkit-mask-composite: source-in;
+        mask-image:
+            linear-gradient(to left, black 0%, transparent 100%),
+            linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
+        mask-composite: intersect;
+    }
+    .food-float::after {
+        content: ""; position: absolute; inset: 0;
+        background: linear-gradient(180deg, rgba(8,10,19,0.55), rgba(8,10,19,0.72));
+        backdrop-filter: grayscale(25%);
+    }
+    .food-float span { display: none; }
+
+    /* ---------- App background ---------- */
     .stApp {
         background:
             radial-gradient(1000px 520px at 10% -8%, rgba(255,200,57,0.10), transparent 55%),
@@ -66,11 +109,15 @@ st.markdown("""
     }
     h1, h2, h3, h4, h5, h6, p, span, label, div { color: var(--text); }
 
+    ::selection { background: rgba(255,200,57,0.35); }
+
+    /* ---------- Hide default sidebar (we use a top navbar) ---------- */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0e1120, #141a2e) !important;
         border-right: 1px solid var(--line);
     }
 
+    /* ---------- Top navbar / brand ---------- */
     .vip-brand { display:flex; align-items:center; gap:12px; }
     .vip-brand .mark {
         width: 44px; height: 44px; border-radius: 14px;
@@ -82,6 +129,7 @@ st.markdown("""
     .vip-brand .name { font-family:'Poppins', sans-serif; font-size: 1.35rem; font-weight:800; color: var(--yellow-light) !important; line-height:1.1; }
     .vip-brand .tag { font-size: 0.68rem; letter-spacing: 2.5px; text-transform: uppercase; color: var(--text-dim) !important; }
 
+    /* ---------- Hero banner (full-bleed photo hero, like "Enjoy Our Delicious Meal") ---------- */
     .hero-banner {
         position: relative; overflow:hidden;
         background:
@@ -105,7 +153,18 @@ st.markdown("""
         color: #ffffff !important; -webkit-text-fill-color: #ffffff;
     }
     .hero-banner p { font-weight: 500; color: #d7dae4 !important; font-size:1rem; margin: 4px 0; max-width: 560px; }
+    .hero-divider { display: none; }
+    .hero-cta {
+        display:inline-block; margin-top: 22px; width: fit-content;
+        background: linear-gradient(135deg, var(--yellow-light), var(--yellow-deep));
+        color: var(--ink) !important; font-weight: 800; letter-spacing:.3px;
+        padding: 13px 30px; border-radius: 999px; text-decoration:none !important;
+        box-shadow: 0 10px 24px rgba(255,200,57,0.35);
+        transition: transform .15s ease;
+    }
+    .hero-cta:hover { transform: translateY(-2px); }
 
+    /* ---------- Section labels ---------- */
     .section-label {
         font-family:'Poppins', sans-serif; font-size:1.35rem; font-weight:700;
         color: var(--text) !important; margin: 6px 0 16px 0;
@@ -113,60 +172,155 @@ st.markdown("""
     }
     .section-label::after { content:""; flex:1; height:1px; background: var(--line); }
 
+    /* ---------- Card style for menu items ---------- */
     .menu-card {
         background: linear-gradient(180deg, var(--panel-2), var(--panel));
         border: 1px solid var(--line);
         border-radius: 20px;
         padding: 18px;
         margin-bottom: 18px;
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color .18s ease;
     }
+    .menu-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 14px 30px rgba(0,0,0,0.5);
+        border-color: rgba(255,200,57,0.55);
+    }
+    .menu-card img { border-radius: 14px !important; }
     .dish-name { font-family:'Poppins', sans-serif; font-size:1.12rem; font-weight:700; margin: 2px 0 4px 0; color: var(--text) !important; }
     .dish-desc { color: var(--text-dim) !important; font-size:0.87rem; line-height:1.5; min-height: 2.6em; }
 
     .price-badge {
         display: inline-block;
         background: rgba(255,200,57,0.12);
+        border: none;
         color: var(--yellow) !important;
         font-weight: 800;
+        letter-spacing: .2px;
         padding: 5px 16px;
         border-radius: 999px;
         font-size: 0.98rem;
     }
 
-    /* Standardized button styling so buttons are visible and styled properly */
+    /* ---------- Buttons (solid yellow pill, like "Place Order") ---------- */
     .stButton button, div.stFormSubmitButton > button {
         background: linear-gradient(135deg, var(--yellow-light), var(--yellow-deep)) !important;
         color: var(--ink) !important;
         font-weight: 800 !important;
+        letter-spacing: .3px;
         border: none !important;
         border-radius: 999px !important;
         padding: 0.6rem 1.3rem !important;
         box-shadow: 0 8px 18px rgba(255,200,57,0.3) !important;
+        transition: all 0.15s ease !important;
+    }
+    .stButton button:hover, div.stFormSubmitButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 22px rgba(255,200,57,0.45) !important;
+        filter: brightness(1.04);
     }
     .stButton button p, div.stFormSubmitButton > button p { color: var(--ink) !important; font-weight:800 !important; }
 
-    /* Fix input fields to not affect pills / container widgets */
-    .stTextInput input, .stTextArea textarea, .stNumberInput input {
+    /* Logout / secondary look for the small top-right button */
+    section.main div[data-testid="stVerticalBlock"] div[data-testid="column"]:last-child .stButton button {
+        background: rgba(255,255,255,0.06) !important;
+        color: var(--text) !important;
+        border: 1px solid var(--line) !important;
+        box-shadow: none !important;
+        border-radius: 10px !important;
+    }
+
+    /* ---------- Inputs (kept solid white with dark text for guaranteed readability
+         across Streamlit versions — broad selectors so nothing slips through) ---------- */
+    input[type="text"], input[type="number"], input[type="password"],
+    textarea,
+    .stTextInput input, .stTextArea textarea, .stNumberInput input, .stDateInput input,
+    div[data-baseweb="input"] input, div[data-baseweb="textarea"] textarea,
+    div[data-baseweb="base-input"] input {
+        color: #14120f !important;
+        background-color: #ffffff !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 12px !important;
+        caret-color: #14120f !important;
+    }
+    input::placeholder, textarea::placeholder { color: #8a8378 !important; opacity: 1 !important; }
+    .stTextInput input:focus, .stTextArea textarea:focus, .stNumberInput input:focus {
+        border-color: var(--yellow) !important; box-shadow: 0 0 0 1px var(--yellow) !important;
+    }
+
+    /* Selectbox / dropdown — closed control */
+    .stSelectbox div[data-baseweb="select"] > div,
+    div[data-baseweb="select"] > div {
         color: #14120f !important;
         background-color: #ffffff !important;
         border: 1px solid var(--line) !important;
         border-radius: 12px !important;
     }
-    
+    .stSelectbox div[data-baseweb="select"] * { color: #14120f !important; fill: #14120f !important; }
+
+    /* Selectbox open dropdown list (rendered in a portal, needs its own rule) */
+    div[data-baseweb="popover"] ul[role="listbox"],
+    div[data-baseweb="menu"] {
+        background-color: #ffffff !important;
+    }
+    div[data-baseweb="popover"] ul[role="listbox"] li,
+    div[data-baseweb="menu"] li,
+    div[data-baseweb="popover"] li * {
+        color: #14120f !important;
+        background-color: #ffffff !important;
+    }
+    div[data-baseweb="popover"] li:hover {
+        background-color: rgba(255,200,57,0.18) !important;
+    }
+
+    label p { color: var(--text-dim) !important; font-size:0.83rem !important; font-weight:600 !important; }
+
+    /* ---------- KPI metric cards ---------- */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(180deg, var(--panel-2), var(--panel));
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 16px 18px;
+    }
+    div[data-testid="stMetricValue"] { color: var(--yellow-light) !important; font-family:'Poppins', sans-serif; }
+    div[data-testid="stMetricLabel"] { color: var(--text-dim) !important; }
+
+    /* ---------- Tabs ---------- */
+    button[data-baseweb="tab"] { font-weight:600 !important; color: var(--text-dim) !important; }
+    button[data-baseweb="tab"][aria-selected="true"] { color: var(--yellow-light) !important; }
+    div[data-baseweb="tab-highlight"] { background-color: var(--yellow) !important; }
+    div[data-baseweb="tab-border"] { background-color: var(--line) !important; }
+
+    /* ---------- Status badges ---------- */
     .badge {
-        display: inline-block; padding: 3px 13px; border-radius: 999px;
-        font-weight: 700; font-size: 0.72rem; text-transform: uppercase;
+        display: inline-block;
+        padding: 3px 13px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 0.72rem;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+        vertical-align: middle;
     }
     .badge-new { background: rgba(255,200,57,0.18); color: var(--yellow-light) !important; border:1px solid var(--yellow); }
     .badge-preparing { background: rgba(245,166,35,0.16); color: #ffb85c !important; border:1px solid #f5a623; }
     .badge-delivery { background: rgba(77,163,255,0.16); color: #8fc2ff !important; border:1px solid var(--blue); }
     .badge-completed { background: rgba(62,207,142,0.16); color: #7fe6b6 !important; border:1px solid var(--green); }
 
+    @keyframes glow {
+        0% { box-shadow: 0 0 0 0 rgba(255,200,57,0.35); }
+        50% { box-shadow: 0 0 0 8px rgba(255,200,57,0); }
+        100% { box-shadow: 0 0 0 0 rgba(255,200,57,0); }
+    }
     .blink-box {
-        padding: 18px; border-radius: 18px; border: 1px solid var(--yellow);
+        padding: 18px;
+        border-radius: 18px;
+        animation: glow 1.8s infinite;
+        border: 1px solid var(--yellow);
         background: linear-gradient(180deg, rgba(255,200,57,0.08), var(--panel));
     }
 
+    /* ---------- Login card ---------- */
     .login-wrap { max-width: 420px; margin: 30px auto 0 auto; }
     .login-card {
         background: linear-gradient(180deg, var(--panel-2), var(--panel));
@@ -178,7 +332,126 @@ st.markdown("""
         display:flex; align-items:center; justify-content:center; font-size:26px;
         background: linear-gradient(135deg, var(--yellow-light), var(--yellow-deep)); color: var(--ink);
     }
+
+    hr { border-color: var(--line) !important; }
+    .stCaption, [data-testid="stCaptionContainer"] { color: var(--text-dim) !important; }
+
+    /* ---------- Pills / segmented controls (nav switch + category filter) ---------- */
+    div[data-testid="stButtonGroup"] [data-testid="stWidgetLabel"] { display: none !important; }
+    div[data-testid="stButtonGroup"] > div:last-child {
+        gap: 6px !important; flex-wrap: wrap;
+        background: rgba(255,255,255,0.035);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 6px;
+    }
+    div[data-testid="stButtonGroup"] [data-variant="pills"] {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 999px !important;
+        color: var(--text-dim) !important;
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+        padding: 7px 18px !important;
+        transition: all .15s ease !important;
+    }
+    div[data-testid="stButtonGroup"] [data-variant="pills"]:hover {
+        background: rgba(255,200,57,0.12) !important;
+        color: var(--yellow-light) !important;
+    }
+    div[data-testid="stButtonGroup"] [data-variant="pills"][data-selected] {
+        background: linear-gradient(135deg, var(--yellow-light), var(--yellow-deep)) !important;
+        color: var(--ink) !important;
+        box-shadow: 0 4px 14px rgba(255,200,57,0.35) !important;
+    }
+    /* Category filter row wraps onto its own centred pill-track per line */
+    .stButtonGroup { margin-bottom: 20px !important; }
+
+    /* ---------- Quantity stepper (number input) ---------- */
+    div[data-testid="stNumberInput"] [data-testid="stWidgetLabel"] { display: none !important; }
+    div[data-testid="stNumberInputContainer"] {
+        background: var(--panel) !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 999px !important;
+        overflow: hidden;
+        height: 40px !important;
+    }
+    div[data-testid="stNumberInputContainer"] input[data-testid="stNumberInputField"] {
+        background: transparent !important;
+        color: var(--yellow-light) !important;
+        font-weight: 800 !important;
+        text-align: center !important;
+        border: none !important;
+        border-radius: 0 !important;
+    }
+    button[data-testid="stNumberInputStepDown"], button[data-testid="stNumberInputStepUp"] {
+        background: rgba(255,200,57,0.14) !important;
+        border: none !important;
+        color: var(--yellow) !important;
+    }
+    button[data-testid="stNumberInputStepDown"]:hover, button[data-testid="stNumberInputStepUp"]:hover {
+        background: rgba(255,200,57,0.28) !important;
+    }
+
+    /* ---------- Info / success / error / warning boxes ---------- */
+    div[data-testid="stAlertContainer"] {
+        background: var(--panel) !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 16px !important;
+    }
+    div[data-testid="stAlertContainer"] p { color: var(--text) !important; }
+    div[data-testid="stAlertContainer"] svg { fill: var(--yellow) !important; }
+
+    /* ---------- General spacing polish ---------- */
+    div[data-testid="stVerticalBlock"] { gap: 0.9rem; }
+    .stTextInput, .stSelectbox, .stTextArea { margin-bottom: 2px; }
+
+    /* ============================================================
+       RESPONSIVE — phones & small tablets
+       ============================================================ */
+    @media (max-width: 768px) {
+        .block-container { padding-top: 4.5rem !important; padding-left: 0.9rem !important; padding-right: 0.9rem !important; }
+        .food-float { display: none; }
+        .vip-brand .name { font-size: 1.1rem; }
+        .vip-brand .mark { width: 38px; height: 38px; font-size: 18px; }
+        .hero-banner { padding: 30px 20px; border-radius: 18px; min-height: 260px; background-position: 70% center; }
+        .hero-banner h1 { font-size: 1.75rem; }
+        .hero-banner p { font-size: 0.85rem; }
+        .hero-cta { padding: 10px 22px; font-size: 0.85rem; }
+        .section-label { font-size: 1.15rem; }
+        div[data-testid="stButtonGroup"] > div:last-child { width: 100%; justify-content: center; }
+        div[data-testid="stButtonGroup"] [data-variant="pills"] { font-size: 0.78rem !important; padding: 6px 12px !important; }
+        .menu-card { padding: 14px; border-radius: 16px; }
+        div[data-testid="stMetric"] { padding: 12px 14px; }
+    }
+    @media (max-width: 480px) {
+        .hero-banner h1 { font-size: 1.5rem; }
+        .vip-brand .tag { display: none; }
+    }
     </style>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# DECORATIVE FLOATING FOOD ICONS (left / right gutters)
+# ============================================================
+st.markdown("""
+    <div class="food-float left">
+        <span style="left:10px; top:8%; animation-delay:0s;">🍲</span>
+        <span style="left:35px; top:24%; animation-delay:1.2s; font-size:1.5rem;">🥗</span>
+        <span style="left:5px; top:42%; animation-delay:2.4s;">🍜</span>
+        <span style="left:38px; top:60%; animation-delay:0.6s; font-size:1.6rem;">🥘</span>
+        <span style="left:8px; top:78%; animation-delay:1.8s;">🍰</span>
+        <span style="left:32px; top:92%; animation-delay:3s; font-size:1.4rem;">🍹</span>
+    </div>
+    <div class="food-float right">
+        <span style="right:12px; top:12%; animation-delay:0.9s;">🍛</span>
+        <span style="right:38px; top:30%; animation-delay:2.1s; font-size:1.5rem;">🧁</span>
+        <span style="right:8px; top:48%; animation-delay:0.3s;">🥙</span>
+        <span style="right:35px; top:66%; animation-delay:1.5s; font-size:1.6rem;">🍹</span>
+        <span style="right:10px; top:84%; animation-delay:2.7s;">🍩</span>
+        <span style="right:30px; top:6%; animation-delay:3.3s; font-size:1.3rem;">☕</span>
+    </div>
 """, unsafe_allow_html=True)
 
 # ============================================================
@@ -190,8 +463,6 @@ if "cart" not in st.session_state:
     st.session_state.cart = {}
 if "admin_logged_in" not in st.session_state:
     st.session_state.admin_logged_in = False
-if "order_success_msg" not in st.session_state:
-    st.session_state.order_success_msg = ""
 
 # ============================================================
 # HELPERS
@@ -231,49 +502,45 @@ def send_automated_sms(phone, message):
     except Exception as e:
         print(f"WhatsApp automation error: {e}")
 
+# Menu categories — shown as tabs on the storefront and as a dropdown in the admin panel
 CATEGORIES = ["Breakfast", "Lunch", "Dinner", "Desserts", "Cold Drinks"]
 CATEGORY_ICONS = {"Breakfast": "🍳", "Lunch": "🍛", "Dinner": "🍽️", "Desserts": "🍰", "Cold Drinks": "🥤"}
 
 DEMO_MENU = [
-    {"id": 1, "item_name": "Special Chicken Biryani", "price": 350, "cost_price": 220, "description": "Ghar ke masalon se bani lazeez biryani", "is_available": True, "category": "Lunch", "image_url": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=500"},
-    {"id": 2, "item_name": "Aloo Keema & Roti", "price": 280, "cost_price": 160, "description": "Fresh minced meat with soft homemade chapatis", "is_available": True, "category": "Dinner", "image_url": "https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=500"},
-    {"id": 3, "item_name": "Daal Chawal Desi Ghee", "price": 200, "cost_price": 110, "description": "Ultimate comfort food cooked with pure desi ghee", "is_available": True, "category": "Lunch", "image_url": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=500"},
+    {"id": 1, "item_name": "Special Chicken Biryani", "price": 350, "cost_price": 220,
+     "description": "Ghar ke masalon se bani lazeez biryani", "is_available": True, "category": "Lunch",
+     "image_url": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=500"},
+    {"id": 2, "item_name": "Aloo Keema & Roti", "price": 280, "cost_price": 160,
+     "description": "Fresh minced meat with soft homemade chapatis", "is_available": True, "category": "Dinner",
+     "image_url": "https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=500"},
+    {"id": 3, "item_name": "Daal Chawal Desi Ghee", "price": 200, "cost_price": 110,
+     "description": "Ultimate comfort food cooked with pure desi ghee", "is_available": True, "category": "Lunch",
+     "image_url": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=500"},
 ]
 
+@st.cache_data(ttl=30)
 def get_menu_items(only_available=True):
-    conn = get_db_connection()
-    if conn:
+    if supabase:
         try:
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            query = "SELECT * FROM menu_items"
+            q = supabase.table("menu_items").select("*")
             if only_available:
-                query += " WHERE is_available = TRUE"
-            cursor.execute(query)
-            data = cursor.fetchall()
-            cursor.close()
-            conn.close()
-            if data:
-                return data
+                q = q.eq("is_available", True)
+            res = q.execute()
+            if res.data:
+                return res.data
         except Exception:
-            if conn:
-                conn.close()
+            pass
     return [m for m in DEMO_MENU if (m["is_available"] or not only_available)]
 
 def get_orders():
     orders = list(st.session_state.local_orders)
-    conn = get_db_connection()
-    if conn:
+    if supabase:
         try:
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cursor.execute("SELECT * FROM orders ORDER BY id DESC")
-            data = cursor.fetchall()
-            cursor.close()
-            conn.close()
-            if data:
-                orders = data + orders
+            res = supabase.table("orders").select("*").order("id", desc=True).execute()
+            if res.data:
+                orders = res.data + orders
         except Exception:
-            if conn:
-                conn.close()
+            pass
     if not orders:
         orders = [{
             "id": 101, "customer_name": "Ahmed Ali", "phone": "03001234567",
@@ -345,16 +612,13 @@ st.markdown("<hr style='margin:14px 0 22px 0;'>", unsafe_allow_html=True)
 if portal_mode == "🍽️ Customer Storefront":
     st.markdown("""
         <div class="hero-banner">
-            <span class="hero-eyebrow">🔥 Chef's Special · Fresh Daily</span>
+            <span class="hero-eyebrow">🔥 Chef's Special · 50% OFF first order</span>
             <h1>Enjoy Our<br>Delicious Meal</h1>
             <p>Fresh, hygienic, and authentic home-cooked meals — plated with care, delivered with pride.</p>
             <p>⏰ Open daily · 9:00 AM – 10:00 PM</p>
+            <a href="#" class="hero-cta" onclick="return false;">🍽️ Explore Menu</a>
         </div>
     """, unsafe_allow_html=True)
-
-    if st.session_state.order_success_msg:
-        st.success(st.session_state.order_success_msg)
-        st.session_state.order_success_msg = ""
 
     menu_items = get_menu_items(only_available=True)
 
@@ -391,6 +655,9 @@ if portal_mode == "🍽️ Customer Storefront":
                     del st.session_state.cart[item["id"]]
             st.markdown('</div>', unsafe_allow_html=True)
 
+        # Category filter — a single set of cards/widgets is rendered per run
+        # (never duplicated across categories), so there's no risk of duplicate
+        # widget keys or the cart quantity getting out of sync.
         cat_options = ["✨ All"] + [f"{CATEGORY_ICONS.get(c, '🍴')} {c}" for c in CATEGORIES]
         cat_choice = st.pills(
             "Category filter", cat_options, default="✨ All", required=True,
@@ -451,22 +718,22 @@ if portal_mode == "🍽️ Customer Storefront":
                         }
                         st.session_state.local_orders.insert(0, new_order)
 
-                        conn = get_db_connection()
-                        if conn:
+                        if supabase:
+                            payload = {
+                                "customer_name": c_name, "phone": c_phone, "address": c_address,
+                                "items": str(st.session_state.cart), "total_amount": total_bill,
+                                "status": "New", "order_time": order_time
+                            }
                             try:
-                                cursor = conn.cursor()
-                                cursor.execute(
-                                    "INSERT INTO orders (customer_name, phone, address, items, total_amount, status) VALUES (%s, %s, %s, %s, %s, %s)",
-                                    (c_name, c_phone, c_address, str(st.session_state.cart), total_bill, "New")
-                                )
-                                conn.commit()
-                                cursor.close()
-                                conn.close()
-                            except Exception as e:
-                                if conn:
-                                    conn.close()
+                                supabase.table("orders").insert(payload).execute()
+                            except Exception:
+                                payload.pop("order_time", None)
+                                try:
+                                    supabase.table("orders").insert(payload).execute()
+                                except Exception:
+                                    pass
 
-                        st.session_state.order_success_msg = "🎉 Order placed successfully! Kitchen notified."
+                        st.success("🎉 Order placed successfully! Kitchen notified.")
                         st.session_state.cart = {}
                         safe_rerun()
 
@@ -494,6 +761,7 @@ elif portal_mode == "🔐 Admin Management Panel":
                 else:
                     st.error("Invalid Username or Password!")
         st.markdown("""
+                    <p style="font-size:0.75rem;color:var(--text-dim);">⚠️ Change the default admin username/password before going live.</p>
                 </div>
             </div>
         """, unsafe_allow_html=True)
@@ -517,35 +785,43 @@ elif portal_mode == "🔐 Admin Management Panel":
                 with c1:
                     new_name = st.text_input("Food Item Name *")
                     new_price = st.number_input("Selling Price (Rs.) *", min_value=0, step=10)
-                    new_category = st.selectbox("Category *", CATEGORIES)
+                    new_category = st.selectbox("Category * (decides which tab it shows under)", CATEGORIES)
                 with c2:
-                    new_cost = st.number_input("Cost Price (Rs.) *", min_value=0, step=10)
+                    new_cost = st.number_input("Cost Price (Rs.) — what it costs you to make *", min_value=0, step=10)
                     new_img = st.text_input("Image URL")
-                new_desc = st.text_area("Description")
+                new_desc = st.text_area("Description (Ingredients / Details)")
+
+                if new_price > 0 and new_cost >= 0:
+                    margin = new_price - new_cost
+                    margin_pct = (margin / new_price * 100) if new_price else 0
+                    st.caption(f"💰 Estimated margin per plate: {fmt(margin)} ({margin_pct:.0f}%)")
 
                 submit_food = st.form_submit_button("💾 Save & Publish to Menu")
                 if submit_food:
                     if not new_name or new_price <= 0:
                         st.error("Please provide a valid item name and price!")
                     else:
-                        conn = get_db_connection()
-                        if conn:
+                        payload = {
+                            "item_name": new_name, "price": new_price, "cost_price": new_cost,
+                            "description": new_desc, "image_url": new_img, "is_available": True,
+                            "category": new_category
+                        }
+                        if supabase:
                             try:
-                                cursor = conn.cursor()
-                                cursor.execute(
-                                    "INSERT INTO menu_items (item_name, price, cost_price, description, is_available, category, image_url) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                                    (new_name, new_price, new_cost, new_desc, True, new_category, new_img)
-                                )
-                                conn.commit()
-                                cursor.close()
-                                conn.close()
+                                supabase.table("menu_items").insert(payload).execute()
                                 st.success(f"✅ '{new_name}' added under {new_category} and is now live!")
+                                get_menu_items.clear()
                             except Exception as e:
-                                if conn:
-                                    conn.close()
-                                st.error(f"Failed to add menu item: {e}")
+                                # Older tables may not have a "category" column yet — retry without it
+                                try:
+                                    payload.pop("category", None)
+                                    supabase.table("menu_items").insert(payload).execute()
+                                    st.success(f"✅ '{new_name}' added and is now live! (Run the updated schema to enable categories.)")
+                                    get_menu_items.clear()
+                                except Exception as e2:
+                                    st.error(f"Failed to add menu item: {e2}")
                         else:
-                            st.success(f"✅ '{new_name}' added in Demo mode!")
+                            st.success(f"✅ '{new_name}' added under {new_category} in Demo mode!")
 
             st.markdown("---")
             st.markdown('<div class="section-label">Current Menu</div>', unsafe_allow_html=True)
@@ -559,30 +835,20 @@ elif portal_mode == "🔐 Admin Management Panel":
                 cols[2].write(f"Cost: {fmt(item.get('cost_price', 0))}")
                 is_avail = item.get("is_available", True)
                 if cols[3].button("🚫 Hide" if is_avail else "✅ Show", key=f"toggle_{item['id']}"):
-                    conn = get_db_connection()
-                    if conn:
+                    if supabase:
                         try:
-                            cursor = conn.cursor()
-                            cursor.execute("UPDATE menu_items SET is_available = %s WHERE id = %s", (not is_avail, item["id"]))
-                            conn.commit()
-                            cursor.close()
-                            conn.close()
-                        except Exception:
-                            if conn:
-                                conn.close()
+                            supabase.table("menu_items").update({"is_available": not is_avail}).eq("id", item["id"]).execute()
+                            get_menu_items.clear()
+                        except Exception as e:
+                            st.error(str(e))
                     safe_rerun()
                 if cols[4].button("🗑️ Delete", key=f"del_{item['id']}"):
-                    conn = get_db_connection()
-                    if conn:
+                    if supabase:
                         try:
-                            cursor = conn.cursor()
-                            cursor.execute("DELETE FROM menu_items WHERE id = %s", (item["id"],))
-                            conn.commit()
-                            cursor.close()
-                            conn.close()
-                        except Exception:
-                            if conn:
-                                conn.close()
+                            supabase.table("menu_items").delete().eq("id", item["id"]).execute()
+                            get_menu_items.clear()
+                        except Exception as e:
+                            st.error(str(e))
                     safe_rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -593,12 +859,13 @@ elif portal_mode == "🔐 Admin Management Panel":
             orders = get_orders()
 
             if search_q:
-                orders = [o for o in orders if search_q.lower() in str(o.get("customer_name", "")).lower() or search_q in str(o.get("phone", ""))]
+                orders = [o for o in orders if search_q.lower() in str(o.get("customer_name", "")).lower()
+                          or search_q in str(o.get("phone", ""))]
 
             status_tabs = st.tabs(["🚨 New", "👨‍🍳 Preparing", "🚴 Out for Delivery", "✅ Completed", "📋 All"])
             status_map = {0: "New", 1: "Preparing", 2: "Out for Delivery", 3: "Completed"}
 
-            def render_order(order, tab_name="general"):
+            def render_order(order):
                 status = order.get("status", "New")
                 order_id = order.get("id", 0)
                 c_name = order.get("customer_name", "Unknown")
@@ -607,9 +874,10 @@ elif portal_mode == "🔐 Admin Management Panel":
                 total = order.get("total_amount", 0)
                 clean_items_str = format_order_items(order.get("items", "-"))
 
-                badge_class = {"New": "badge-new", "Preparing": "badge-preparing", "Out for Delivery": "badge-delivery", "Completed": "badge-completed"}.get(status, "badge-new")
-                box_class = "blink-box" if status == "New" else "menu-card"
+                badge_class = {"New": "badge-new", "Preparing": "badge-preparing",
+                                "Out for Delivery": "badge-delivery", "Completed": "badge-completed"}.get(status, "badge-new")
 
+                box_class = "blink-box" if status == "New" else "menu-card"
                 st.markdown(f"""
                     <div class="{box_class}">
                         <h4>Order #{order_id} — {c_name} <span class="badge {badge_class}">{status}</span></h4>
@@ -621,22 +889,24 @@ elif portal_mode == "🔐 Admin Management Panel":
 
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    # Guaranteed unique key per tab and per order instance
-                    if st.button("Accept & Prep 👨‍🍳", key=f"prep_{tab_name}_{order_id}_{id(order)}"):
+                    if st.button("Accept & Prep 👨‍🍳", key=f"adm_prep_{order_id}"):
                         order["status"] = "Preparing"
-                        msg = f"Salam {c_name}! Aapka Order #{order_id} accept ho gaya hai aur tayyar ho raha hai."
+                        msg = (f"Salam {c_name}! Aapka Order #{order_id} accept ho gaya hai aur tayyar ho raha hai.\n\n"
+                               f"Items: {clean_items_str}\nTotal Amount: {fmt(total)}\n\n"
+                               f"🕒 Timings: Subha 9:00 AM se Raat 10:00 PM tak\nShukriya Homemade Kitchen se order karne ke liye!")
                         send_automated_sms(phone, msg)
+                        st.success(f"Order #{order_id} accepted, WhatsApp message sent!")
                         safe_rerun()
                 with col2:
-                    if st.button("Out for Delivery 🚴", key=f"deliv_{tab_name}_{order_id}_{id(order)}"):
+                    if st.button("Out for Delivery 🚴", key=f"adm_del_{order_id}"):
                         order["status"] = "Out for Delivery"
-                        msg = f"Salam {c_name}! Aapka Order #{order_id} out for delivery hai."
+                        msg = f"Salam {c_name}! Aapka Order #{order_id} out for delivery hai. Jald pohnch jayega. Shukriya!"
                         send_automated_sms(phone, msg)
                         safe_rerun()
                 with col3:
-                    if st.button("Complete ✅", key=f"comp_{tab_name}_{order_id}_{id(order)}"):
+                    if st.button("Complete ✅", key=f"adm_comp_{order_id}"):
                         order["status"] = "Completed"
-                        msg = f"Salam {c_name}! Aapka Order #{order_id} deliver ho chuka hai. Enjoy!"
+                        msg = f"Salam {c_name}! Aapka Order #{order_id} deliver ho chuka hai. Enjoy your meal! 🍽️"
                         send_automated_sms(phone, msg)
                         safe_rerun()
                 st.divider()
@@ -647,13 +917,13 @@ elif portal_mode == "🔐 Admin Management Panel":
                     if not filtered:
                         st.info("No orders in this category.")
                     for o in filtered:
-                        render_order(o, tab_name=f"status_tab_{status_map[idx]}")
+                        render_order(o)
 
             with status_tabs[4]:
                 if not orders:
                     st.info("No orders yet.")
                 for o in orders:
-                    render_order(o, tab_name="all_tab")
+                    render_order(o)
 
         # ---------------- TAB 3: SALES & PROFIT DASHBOARD ----------------
         with tab3:
@@ -664,9 +934,9 @@ elif portal_mode == "🔐 Admin Management Panel":
             orders = get_orders()
             df = compute_analytics(orders, cost_lookup)
 
-            range_choice = st.selectbox("View period", ["Today", "This Week", "This Month", "All Time"])
-            today = date.today()
+            range_choice = st.selectbox("View period", ["Today", "This Week", "This Month", "All Time", "Custom Range"])
 
+            today = date.today()
             if range_choice == "Today":
                 mask = df["date"].dt.date == today
             elif range_choice == "This Week":
@@ -674,6 +944,11 @@ elif portal_mode == "🔐 Admin Management Panel":
                 mask = df["date"].dt.date >= start
             elif range_choice == "This Month":
                 mask = (df["date"].dt.month == today.month) & (df["date"].dt.year == today.year)
+            elif range_choice == "Custom Range":
+                c1, c2 = st.columns(2)
+                start_d = c1.date_input("From", today - timedelta(days=7))
+                end_d = c2.date_input("To", today)
+                mask = (df["date"].dt.date >= start_d) & (df["date"].dt.date <= end_d)
             else:
                 mask = pd.Series([True] * len(df))
 
@@ -689,6 +964,34 @@ elif portal_mode == "🔐 Admin Management Panel":
             k1, k2, k3, k4, k5 = st.columns(5)
             k1.metric("🧾 Orders", total_orders)
             k2.metric("💵 Revenue", fmt(total_revenue))
-            k3.metric("🍳 Cost", fmt(total_cost))
+            k3.metric("🍳 Cost (ingredients etc.)", fmt(total_cost))
             k4.metric("📈 Profit", fmt(total_profit), f"{margin_pct:.0f}% margin")
-            k5.metric("🧮 Avg. Order", fmt(avg_order))
+            k5.metric("🧮 Avg. Order Value", fmt(avg_order))
+
+            st.markdown("---")
+
+            if total_orders:
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.write("**Revenue over time**")
+                    daily = df_filtered.dropna(subset=["date"]).copy()
+                    if not daily.empty:
+                        daily["day"] = daily["date"].dt.date
+                        daily_grouped = daily.groupby("day")[["revenue", "cost", "profit"]].sum()
+                        st.line_chart(daily_grouped)
+                    else:
+                        st.info("No dated orders to chart yet — add 'order_time' to your Supabase orders table.")
+                with c2:
+                    st.write("**Revenue vs Cost vs Profit**")
+                    st.bar_chart(pd.DataFrame({
+                        "Amount": [total_revenue, total_cost, total_profit]
+                    }, index=["Revenue", "Cost", "Profit"]))
+            else:
+                st.info("No orders found for this period yet.")
+
+            st.markdown("---")
+            st.caption(
+                "ℹ️ For full accuracy, add an **order_time** (timestamp) column to your `orders` table and a "
+                "**cost_price** (numeric) column to your `menu_items` table in Supabase. The app already writes "
+                "to these columns automatically if they exist."
+            )

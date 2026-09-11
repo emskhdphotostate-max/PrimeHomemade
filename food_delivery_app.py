@@ -1,24 +1,124 @@
 import streamlit as st
-from supabase import create_client, Client
 import urllib.parse
 import webbrowser
 import ast
+import os
+import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
 from datetime import datetime, date, timedelta
 import pandas as pd
 
 # ============================================================
-# SUPABASE CONFIGURATION
+# NEON (POSTGRESQL) DATABASE CONFIGURATION
 # ============================================================
-SUPABASE_URL = "YOUR_SUPABASE_URL"
-SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY"
+# Apna Neon connection string yahan paste karo ya environment
+# variable `DATABASE_URL` set karo.  Agar dono nahi hain to
+# app demo mode mein chalega (sirf session mein orders store
+# honge — refresh pe loss).
+
+NEON_DATABASE_URL = (
+    os.getenv("DATABASE_URL")
+    or os.getenv("NEON_DB_URL")
+    or "postgresql://neondb_owner:npg_9xpZCGBYQu8L@ep-shy-mountain-axtzsqb5-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+)
 
 @st.cache_resource
-def init_supabase() -> Client:
-    if SUPABASE_URL == "YOUR_SUPABASE_URL":
+def get_db_pool():
+    """Return a reusable psycopg2 connection pool, or None if unconfigured."""
+    url = NEON_DATABASE_URL
+    if not url or url.startswith("YOUR_"):
         return None
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+    try:
+        return ThreadedConnectionPool(minconn=1, maxconn=5, dsn=url)
+    except Exception as exc:
+        st.warning(f"Database connection failed: {exc}")
+        return None
 
-supabase = init_supabase()
+
+def db_execute(sql, params=None, fetch_all=False, returning_col=None):
+    """
+    Execute a SQL statement and optionally return results.
+      fetch_all=True   → list[dict]
+      returning_col    → scalar value of that column (e.g. 'id')
+    Returns None if pool is unavailable.
+    """
+    pool = get_db_pool()
+    if pool is None:
+        return None
+    conn = None
+    try:
+        conn = pool.getconn()
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            if returning_col:
+                conn.commit()
+                row = cur.fetchone()
+                return row[0] if row else None
+            if fetch_all:
+                cols = [d.name for d in cur.description] if cur.description else []
+                rows = cur.fetchall()
+                return [dict(zip(cols, r)) for r in rows]
+            conn.commit()
+            return None
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise
+    finally:
+        if conn is not None:
+            pool.putconn(conn)
+
+
+_db_initialized = False
+
+def init_database():
+    """Create tables if they don't exist and seed demo menu."""
+    global _db_initialized
+    if _db_initialized:
+        return
+    pool = get_db_pool()
+    if pool is None:
+        return
+    try:
+        db_execute("""
+            CREATE TABLE IF NOT EXISTS menu_items (
+                id          SERIAL PRIMARY KEY,
+                item_name   TEXT NOT NULL,
+                price       NUMERIC NOT NULL,
+                cost_price  NUMERIC DEFAULT 0,
+                description TEXT DEFAULT '',
+                image_url   TEXT DEFAULT '',
+                is_available BOOLEAN DEFAULT TRUE,
+                category    TEXT DEFAULT 'Lunch',
+                created_at  TIMESTAMPTZ DEFAULT now()
+            )
+        """)
+        db_execute("""
+            CREATE TABLE IF NOT EXISTS orders (
+                id             SERIAL PRIMARY KEY,
+                customer_name  TEXT NOT NULL,
+                phone          TEXT,
+                address        TEXT,
+                items          TEXT,
+                total_amount   NUMERIC DEFAULT 0,
+                status         TEXT DEFAULT 'New',
+                order_time     TIMESTAMPTZ DEFAULT now(),
+                created_at     TIMESTAMPTZ DEFAULT now()
+            )
+        """)
+        rows = db_execute("SELECT count(*) AS c FROM menu_items", fetch_all=True)
+        if rows and rows[0]["c"] == 0:
+            for m in DEMO_MENU:
+                db_execute(
+                    """INSERT INTO menu_items
+                       (item_name, price, cost_price, description, image_url, is_available, category)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                    (m["item_name"], m["price"], m["cost_price"],
+                     m["description"], m["image_url"], True, m["category"]),
+                )
+        _db_initialized = True
+    except Exception as exc:
+        st.warning(f"Database init issue: {exc}")
 
 st.set_page_config(page_title="Homemade Kitchen | Order & Eat", layout="wide", page_icon="🍔", initial_sidebar_state="collapsed")
 
@@ -518,29 +618,30 @@ DEMO_MENU = [
      "image_url": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=500"},
 ]
 
+init_database()
+
 @st.cache_data(ttl=30)
 def get_menu_items(only_available=True):
-    if supabase:
-        try:
-            q = supabase.table("menu_items").select("*")
-            if only_available:
-                q = q.eq("is_available", True)
-            res = q.execute()
-            if res.data:
-                return res.data
-        except Exception:
-            pass
+    try:
+        if get_db_pool() is not None:
+            cond = " WHERE is_available = TRUE" if only_available else ""
+            rows = db_execute(f"SELECT * FROM menu_items{cond} ORDER BY id", fetch_all=True)
+            if rows:
+                return rows
+    except Exception:
+        pass
     return [m for m in DEMO_MENU if (m["is_available"] or not only_available)]
 
 def get_orders():
-    orders = list(st.session_state.local_orders)
-    if supabase:
+    orders = []
+    if get_db_pool() is not None:
         try:
-            res = supabase.table("orders").select("*").order("id", desc=True).execute()
-            if res.data:
-                orders = res.data + orders
+            rows = db_execute("SELECT * FROM orders ORDER BY id DESC", fetch_all=True)
+            if rows:
+                orders = rows
         except Exception:
             pass
+    orders = orders + list(st.session_state.local_orders)
     if not orders:
         orders = [{
             "id": 101, "customer_name": "Ahmed Ali", "phone": "03001234567",
@@ -550,6 +651,33 @@ def get_orders():
             "order_time": datetime.now().isoformat()
         }]
     return orders
+
+
+def update_order_status_db(order_id, new_status):
+    """Persist status change to Neon (or local fallback)."""
+    if get_db_pool() is not None:
+        try:
+            db_execute("UPDATE orders SET status = %s WHERE id = %s", (new_status, order_id))
+        except Exception:
+            pass
+    else:
+        for o in st.session_state.local_orders:
+            if o.get("id") == order_id:
+                o["status"] = new_status
+
+
+def delete_order_db(order_id):
+    """Delete an order from Neon (or local fallback)."""
+    if get_db_pool() is not None:
+        try:
+            db_execute("DELETE FROM orders WHERE id = %s", (order_id,))
+            return True
+        except Exception:
+            return False
+    st.session_state.local_orders = [
+        o for o in st.session_state.local_orders if o.get("id") != order_id
+    ]
+    return True
 
 def compute_analytics(orders, menu_lookup_cost):
     rows = []
@@ -709,31 +837,34 @@ if portal_mode == "🍽️ Customer Storefront":
                     if not c_name or not c_phone or not c_address:
                         st.error("Please fill all delivery details!")
                     else:
-                        order_id_mock = len(st.session_state.local_orders) + 200
                         order_time = datetime.now().isoformat()
-                        new_order = {
-                            "id": order_id_mock, "customer_name": c_name, "phone": c_phone,
-                            "address": c_address, "items": str(st.session_state.cart),
-                            "total_amount": total_bill, "status": "New", "order_time": order_time
-                        }
-                        st.session_state.local_orders.insert(0, new_order)
+                        items_str = str(st.session_state.cart)
+                        saved_to_db = False
 
-                        if supabase:
-                            payload = {
-                                "customer_name": c_name, "phone": c_phone, "address": c_address,
-                                "items": str(st.session_state.cart), "total_amount": total_bill,
-                                "status": "New", "order_time": order_time
-                            }
+                        if get_db_pool() is not None:
                             try:
-                                supabase.table("orders").insert(payload).execute()
-                            except Exception:
-                                payload.pop("order_time", None)
-                                try:
-                                    supabase.table("orders").insert(payload).execute()
-                                except Exception:
-                                    pass
+                                db_execute(
+                                    """INSERT INTO orders
+                                       (customer_name, phone, address, items, total_amount, status, order_time)
+                                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                                    (c_name, c_phone, c_address, items_str,
+                                     float(total_bill), "New", order_time),
+                                )
+                                saved_to_db = True
+                            except Exception as exc:
+                                st.error(f"Order save nahi ho paya: {exc}")
 
-                        st.success("🎉 Order placed successfully! Kitchen notified.")
+                        if not saved_to_db:
+                            order_id_mock = 900000 + len(st.session_state.local_orders)
+                            new_order = {
+                                "id": order_id_mock, "customer_name": c_name, "phone": c_phone,
+                                "address": c_address, "items": items_str,
+                                "total_amount": total_bill, "status": "New", "order_time": order_time
+                            }
+                            st.session_state.local_orders.insert(0, new_order)
+
+                        mode_label = "saved to database" if saved_to_db else "demo mode (connect Neon DB for persistence)"
+                        st.success(f"🎉 Order placed successfully! Kitchen notified. ({mode_label})")
                         st.session_state.cart = {}
                         safe_rerun()
 
@@ -806,20 +937,19 @@ elif portal_mode == "🔐 Admin Management Panel":
                             "description": new_desc, "image_url": new_img, "is_available": True,
                             "category": new_category
                         }
-                        if supabase:
+                        if get_db_pool() is not None:
                             try:
-                                supabase.table("menu_items").insert(payload).execute()
+                                db_execute(
+                                    """INSERT INTO menu_items
+                                       (item_name, price, cost_price, description, image_url, is_available, category)
+                                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                                    (new_name, float(new_price), float(new_cost),
+                                     new_desc, new_img, True, new_category),
+                                )
                                 st.success(f"✅ '{new_name}' added under {new_category} and is now live!")
                                 get_menu_items.clear()
-                            except Exception as e:
-                                # Older tables may not have a "category" column yet — retry without it
-                                try:
-                                    payload.pop("category", None)
-                                    supabase.table("menu_items").insert(payload).execute()
-                                    st.success(f"✅ '{new_name}' added and is now live! (Run the updated schema to enable categories.)")
-                                    get_menu_items.clear()
-                                except Exception as e2:
-                                    st.error(f"Failed to add menu item: {e2}")
+                            except Exception as exc:
+                                st.error(f"Failed to add menu item: {exc}")
                         else:
                             st.success(f"✅ '{new_name}' added under {new_category} in Demo mode!")
 
@@ -835,20 +965,21 @@ elif portal_mode == "🔐 Admin Management Panel":
                 cols[2].write(f"Cost: {fmt(item.get('cost_price', 0))}")
                 is_avail = item.get("is_available", True)
                 if cols[3].button("🚫 Hide" if is_avail else "✅ Show", key=f"toggle_{item['id']}"):
-                    if supabase:
+                    if get_db_pool() is not None:
                         try:
-                            supabase.table("menu_items").update({"is_available": not is_avail}).eq("id", item["id"]).execute()
+                            db_execute("UPDATE menu_items SET is_available = %s WHERE id = %s",
+                                       (not is_avail, item["id"]))
                             get_menu_items.clear()
-                        except Exception as e:
-                            st.error(str(e))
+                        except Exception as exc:
+                            st.error(str(exc))
                     safe_rerun()
                 if cols[4].button("🗑️ Delete", key=f"del_{item['id']}"):
-                    if supabase:
+                    if get_db_pool() is not None:
                         try:
-                            supabase.table("menu_items").delete().eq("id", item["id"]).execute()
+                            db_execute("DELETE FROM menu_items WHERE id = %s", (item["id"],))
                             get_menu_items.clear()
-                        except Exception as e:
-                            st.error(str(e))
+                        except Exception as exc:
+                            st.error(str(exc))
                     safe_rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -865,7 +996,7 @@ elif portal_mode == "🔐 Admin Management Panel":
             status_tabs = st.tabs(["🚨 New", "👨‍🍳 Preparing", "🚴 Out for Delivery", "✅ Completed", "📋 All"])
             status_map = {0: "New", 1: "Preparing", 2: "Out for Delivery", 3: "Completed"}
 
-            def render_order(order):
+            def render_order(order, scope="all"):
                 status = order.get("status", "New")
                 order_id = order.get("id", 0)
                 c_name = order.get("customer_name", "Unknown")
@@ -887,10 +1018,10 @@ elif portal_mode == "🔐 Admin Management Panel":
                     </div>
                 """, unsafe_allow_html=True)
 
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    if st.button("Accept & Prep 👨‍🍳", key=f"adm_prep_{order_id}"):
-                        order["status"] = "Preparing"
+                    if st.button("Accept & Prep 👨‍🍳", key=f"adm_prep_{scope}_{order_id}"):
+                        update_order_status_db(order_id, "Preparing")
                         msg = (f"Salam {c_name}! Aapka Order #{order_id} accept ho gaya hai aur tayyar ho raha hai.\n\n"
                                f"Items: {clean_items_str}\nTotal Amount: {fmt(total)}\n\n"
                                f"🕒 Timings: Subha 9:00 AM se Raat 10:00 PM tak\nShukriya Homemade Kitchen se order karne ke liye!")
@@ -898,16 +1029,24 @@ elif portal_mode == "🔐 Admin Management Panel":
                         st.success(f"Order #{order_id} accepted, WhatsApp message sent!")
                         safe_rerun()
                 with col2:
-                    if st.button("Out for Delivery 🚴", key=f"adm_del_{order_id}"):
-                        order["status"] = "Out for Delivery"
+                    if st.button("Out for Delivery 🚴", key=f"adm_del_{scope}_{order_id}"):
+                        update_order_status_db(order_id, "Out for Delivery")
                         msg = f"Salam {c_name}! Aapka Order #{order_id} out for delivery hai. Jald pohnch jayega. Shukriya!"
                         send_automated_sms(phone, msg)
                         safe_rerun()
                 with col3:
-                    if st.button("Complete ✅", key=f"adm_comp_{order_id}"):
-                        order["status"] = "Completed"
+                    if st.button("Complete ✅", key=f"adm_comp_{scope}_{order_id}"):
+                        update_order_status_db(order_id, "Completed")
                         msg = f"Salam {c_name}! Aapka Order #{order_id} deliver ho chuka hai. Enjoy your meal! 🍽️"
                         send_automated_sms(phone, msg)
+                        safe_rerun()
+                with col4:
+                    if st.button("🗑️ Delete", key=f"adm_delord_{scope}_{order_id}"):
+                        ok = delete_order_db(order_id)
+                        if ok:
+                            st.success(f"Order #{order_id} deleted.")
+                        else:
+                            st.error("Failed to delete order.")
                         safe_rerun()
                 st.divider()
 
@@ -917,13 +1056,13 @@ elif portal_mode == "🔐 Admin Management Panel":
                     if not filtered:
                         st.info("No orders in this category.")
                     for o in filtered:
-                        render_order(o)
+                        render_order(o, scope=f"s{idx}")
 
             with status_tabs[4]:
                 if not orders:
                     st.info("No orders yet.")
                 for o in orders:
-                    render_order(o)
+                    render_order(o, scope="all")
 
         # ---------------- TAB 3: SALES & PROFIT DASHBOARD ----------------
         with tab3:
@@ -980,7 +1119,7 @@ elif portal_mode == "🔐 Admin Management Panel":
                         daily_grouped = daily.groupby("day")[["revenue", "cost", "profit"]].sum()
                         st.line_chart(daily_grouped)
                     else:
-                        st.info("No dated orders to chart yet — add 'order_time' to your Supabase orders table.")
+                        st.info("No dated orders to chart yet.")
                 with c2:
                     st.write("**Revenue vs Cost vs Profit**")
                     st.bar_chart(pd.DataFrame({
@@ -991,7 +1130,6 @@ elif portal_mode == "🔐 Admin Management Panel":
 
             st.markdown("---")
             st.caption(
-                "ℹ️ For full accuracy, add an **order_time** (timestamp) column to your `orders` table and a "
-                "**cost_price** (numeric) column to your `menu_items` table in Supabase. The app already writes "
-                "to these columns automatically if they exist."
+                "ℹ️ Orders aur menu items ab Neon (PostgreSQL) database mein save hote hain. "
+                "Saare orders refresh ke baad bhi yaad rehte hain."
             )

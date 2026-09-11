@@ -85,16 +85,9 @@ def db_execute(sql, params=None, fetch_all=False, returning_col=None):
             pool.putconn(conn)
 
 
-_db_initialized = False
-
+@st.cache_resource
 def init_database():
-    """Create tables if they don't exist and seed demo menu."""
-    global _db_initialized
-    if _db_initialized:
-        return
-    pool = get_db_pool()
-    if pool is None:
-        return
+    """Create tables if they don't exist and seed demo menu (runs once per server process)."""
     try:
         db_execute("""
             CREATE TABLE IF NOT EXISTS menu_items (
@@ -132,7 +125,6 @@ def init_database():
                     (m["item_name"], m["price"], m["cost_price"],
                      m["description"], m["image_url"], True, m["category"]),
                 )
-        _db_initialized = True
     except Exception as exc:
         st.warning(f"Database init issue: {exc}")
 
@@ -518,6 +510,23 @@ st.markdown("""
     }
     div[data-testid="stAlertContainer"] p { color: var(--text) !important; }
     div[data-testid="stAlertContainer"] svg { fill: var(--yellow) !important; }
+    div[data-testid="stAlertContainer"] [aria-live="polite"] { color: var(--text) !important; }
+
+    /* ---------- Toasts (top-right popups) ---------- */
+    [data-testid="stToast"] {
+        background: var(--panel) !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 12px !important;
+        color: var(--text) !important;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.45) !important;
+    }
+    [data-testid="stToast"] p,
+    [data-testid="stToast"] div,
+    [data-testid="stToast"] span,
+    [data-testid="stToast"] strong {
+        color: var(--text) !important;
+    }
+    [data-testid="stToast"] svg { fill: var(--yellow) !important; }
 
     /* ---------- General spacing polish ---------- */
     div[data-testid="stVerticalBlock"] { gap: 0.9rem; }
@@ -766,13 +775,13 @@ def compute_analytics(orders, menu_lookup_cost):
     rows = []
     for o in orders:
         items_dict = _parse_items(o.get("items"))
-        cost = 0
+        cost = 0.0
         for item_id, d in items_dict.items():
             try:
                 key = int(item_id)
             except Exception:
                 key = item_id
-            unit_cost = menu_lookup_cost.get(key, 0)
+            unit_cost = float(menu_lookup_cost.get(key, 0) or 0)
             cost += unit_cost * d.get("quantity", 1)
 
         raw_time = o.get("order_time") or o.get("created_at")
@@ -781,11 +790,12 @@ def compute_analytics(orders, menu_lookup_cost):
         except Exception:
             ts = pd.NaT
 
+        total = float(o.get("total_amount", 0) or 0)
         rows.append({
             "id": o.get("id"),
-            "revenue": float(o.get("total_amount", 0) or 0),
+            "revenue": total,
             "cost": cost,
-            "profit": float(o.get("total_amount", 0) or 0) - cost,
+            "profit": total - cost,
             "date": ts,
             "customer": o.get("customer_name", "Unknown"),
         })

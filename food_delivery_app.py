@@ -934,13 +934,12 @@ st.markdown("""
     <div class="marquee-wrap">
         <div class="marquee-track">
             <span>🔥 50% OFF your first order</span>
-            <span>🚚 Fast delivery within 30 minutes</span>
+            <span>🔥 50% OFF your first order</span>
             <span>⭐ 4.9 rated by local neighbours</span>
             <span>🍛 100% freshly home-cooked</span>
             <span>💛 New dishes added every week</span>
             <span>⏰ Open daily 9 AM – 10 PM</span>
             <span>🔥 50% OFF your first order</span>
-            <span>🚚 Fast delivery within 30 minutes</span>
             <span>⭐ 4.9 rated by local neighbours</span>
             <span>🍛 100% freshly home-cooked</span>
             <span>💛 New dishes added every week</span>
@@ -963,7 +962,6 @@ if portal_mode == "🍽️ Customer Storefront":
             <p>Fresh, hygienic, and authentic home-cooked meals — plated with care, delivered with pride.</p>
             <p>⏰ Open daily · 9:00 AM – 10:00 PM</p>
             <div class="hero-trust">
-                <span>🚚 Fast Delivery</span>
                 <span>⭐ 4.9 Rated</span>
                 <span>🥘 100% Home-Cooked</span>
             </div>

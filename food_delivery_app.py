@@ -10,7 +10,6 @@ import psycopg2.extras
 # ============================================================
 # NEON DATABASE CONFIGURATION
 # ============================================================
-# Add your Neon PostgreSQL connection string here or in Streamlit Secrets
 NEON_CONN_STRING = st.secrets.get("NEON_CONN_STRING", "postgresql://user:password@host/dbname?sslmode=require")
 
 def get_db_connection():
@@ -22,7 +21,7 @@ def get_db_connection():
 st.set_page_config(page_title="Homemade Kitchen | Order & Eat", layout="wide", page_icon="🍔", initial_sidebar_state="collapsed")
 
 # ============================================================
-# CSS — DARK / YELLOW FOOD-DELIVERY APP THEME
+# CSS — DARK / YELLOW FOOD-DELIVERY APP THEME (FIXED)
 # ============================================================
 st.markdown("""
     <style>
@@ -57,35 +56,6 @@ st.markdown("""
     #MainMenu { color: var(--text) !important; }
 
     .block-container { padding-top: 5.5rem !important; max-width: 1200px; position: relative; z-index: 1; }
-
-    .food-float {
-        position: fixed; top: 0; height: 100vh; width: 220px;
-        pointer-events: none; z-index: 0; overflow: hidden;
-        -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.9) 18%, rgba(0,0,0,0.9) 82%, transparent 100%);
-        mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.9) 18%, rgba(0,0,0,0.9) 82%, transparent 100%);
-    }
-    .food-float.left {
-        left: 0;
-        background: url('https://images.unsplash.com/photo-1516684465974-78661ba8165d?w=600&q=60&auto=format&fit=crop') center/cover no-repeat;
-        -webkit-mask-image: linear-gradient(to right, black 0%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
-        -webkit-mask-composite: source-in;
-        mask-image: linear-gradient(to right, black 0%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
-        mask-composite: intersect;
-    }
-    .food-float.right {
-        right: 0;
-        background: url('https://images.unsplash.com/photo-1526823127573-0fda76b6c24f?w=600&q=60&auto=format&fit=crop') center/cover no-repeat;
-        -webkit-mask-image: linear-gradient(to left, black 0%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
-        -webkit-mask-composite: source-in;
-        mask-image: linear-gradient(to left, black 0%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
-        mask-composite: intersect;
-    }
-    .food-float::after {
-        content: ""; position: absolute; inset: 0;
-        background: linear-gradient(180deg, rgba(8,10,19,0.55), rgba(8,10,19,0.72));
-        backdrop-filter: grayscale(25%);
-    }
-    .food-float span { display: none; }
 
     .stApp {
         background:
@@ -135,15 +105,6 @@ st.markdown("""
         color: #ffffff !important; -webkit-text-fill-color: #ffffff;
     }
     .hero-banner p { font-weight: 500; color: #d7dae4 !important; font-size:1rem; margin: 4px 0; max-width: 560px; }
-    .hero-cta {
-        display:inline-block; margin-top: 22px; width: fit-content;
-        background: linear-gradient(135deg, var(--yellow-light), var(--yellow-deep));
-        color: var(--ink) !important; font-weight: 800; letter-spacing:.3px;
-        padding: 13px 30px; border-radius: 999px; text-decoration:none !important;
-        box-shadow: 0 10px 24px rgba(255,200,57,0.35);
-        transition: transform .15s ease;
-    }
-    .hero-cta:hover { transform: translateY(-2px); }
 
     .section-label {
         font-family:'Poppins', sans-serif; font-size:1.35rem; font-weight:700;
@@ -172,6 +133,7 @@ st.markdown("""
         font-size: 0.98rem;
     }
 
+    /* Standardized button styling so buttons are visible and styled properly */
     .stButton button, div.stFormSubmitButton > button {
         background: linear-gradient(135deg, var(--yellow-light), var(--yellow-deep)) !important;
         color: var(--ink) !important;
@@ -183,7 +145,7 @@ st.markdown("""
     }
     .stButton button p, div.stFormSubmitButton > button p { color: var(--ink) !important; font-weight:800 !important; }
 
-    input[type="text"], input[type="number"], input[type="password"], textarea,
+    /* Fix input fields to not affect pills / container widgets */
     .stTextInput input, .stTextArea textarea, .stNumberInput input {
         color: #14120f !important;
         background-color: #ffffff !important;
@@ -390,10 +352,9 @@ if portal_mode == "🍽️ Customer Storefront":
         </div>
     """, unsafe_allow_html=True)
 
-    # Display persistent order success message if available
     if st.session_state.order_success_msg:
         st.success(st.session_state.order_success_msg)
-        st.session_state.order_success_msg = "" # clear after showing
+        st.session_state.order_success_msg = ""
 
     menu_items = get_menu_items(only_available=True)
 
@@ -660,19 +621,20 @@ elif portal_mode == "🔐 Admin Management Panel":
 
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    if st.button("Accept & Prep 👨‍🍳", key=f"adm_prep_{tab_name}_{order_id}"):
+                    # Guaranteed unique key per tab and per order instance
+                    if st.button("Accept & Prep 👨‍🍳", key=f"prep_{tab_name}_{order_id}_{id(order)}"):
                         order["status"] = "Preparing"
                         msg = f"Salam {c_name}! Aapka Order #{order_id} accept ho gaya hai aur tayyar ho raha hai."
                         send_automated_sms(phone, msg)
                         safe_rerun()
                 with col2:
-                    if st.button("Out for Delivery 🚴", key=f"adm_del_{tab_name}_{order_id}"):
+                    if st.button("Out for Delivery 🚴", key=f"deliv_{tab_name}_{order_id}_{id(order)}"):
                         order["status"] = "Out for Delivery"
                         msg = f"Salam {c_name}! Aapka Order #{order_id} out for delivery hai."
                         send_automated_sms(phone, msg)
                         safe_rerun()
                 with col3:
-                    if st.button("Complete ✅", key=f"adm_comp_{tab_name}_{order_id}"):
+                    if st.button("Complete ✅", key=f"comp_{tab_name}_{order_id}_{id(order)}"):
                         order["status"] = "Completed"
                         msg = f"Salam {c_name}! Aapka Order #{order_id} deliver ho chuka hai. Enjoy!"
                         send_automated_sms(phone, msg)
@@ -685,13 +647,13 @@ elif portal_mode == "🔐 Admin Management Panel":
                     if not filtered:
                         st.info("No orders in this category.")
                     for o in filtered:
-                        render_order(o, tab_name=status_map[idx])
+                        render_order(o, tab_name=f"status_tab_{status_map[idx]}")
 
             with status_tabs[4]:
                 if not orders:
                     st.info("No orders yet.")
                 for o in orders:
-                    render_order(o, tab_name="all")
+                    render_order(o, tab_name="all_tab")
 
         # ---------------- TAB 3: SALES & PROFIT DASHBOARD ----------------
         with tab3:

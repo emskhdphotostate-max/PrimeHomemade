@@ -61,23 +61,43 @@ st.markdown("""
     /* Give enough clearance below the fixed header so nothing hides behind it */
     .block-container { padding-top: 5.5rem !important; max-width: 1200px; position: relative; z-index: 1; }
 
-    /* ---------- Floating decorative food icons in the empty side gutters (desktop only) ---------- */
+    /* ---------- Subtle food photography filling the empty side gutters (desktop only) ---------- */
     .food-float {
-        position: fixed; top: 0; height: 100vh; width: 90px;
+        position: fixed; top: 0; height: 100vh; width: 220px;
         pointer-events: none; z-index: 0; overflow: hidden;
+        -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.9) 18%, rgba(0,0,0,0.9) 82%, transparent 100%);
+        mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.9) 18%, rgba(0,0,0,0.9) 82%, transparent 100%);
     }
-    .food-float.left { left: 0; }
-    .food-float.right { right: 0; }
-    .food-float span {
-        position: absolute; font-size: 1.9rem; opacity: 0.14;
-        filter: drop-shadow(0 0 6px rgba(255,200,57,0.25));
-        animation: floatY 9s ease-in-out infinite;
+    .food-float.left {
+        left: 0;
+        background: url('https://images.unsplash.com/photo-1516684465974-78661ba8165d?w=600&q=60&auto=format&fit=crop') center/cover no-repeat;
+        -webkit-mask-image:
+            linear-gradient(to right, black 0%, transparent 100%),
+            linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
+        -webkit-mask-composite: source-in;
+        mask-image:
+            linear-gradient(to right, black 0%, transparent 100%),
+            linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
+        mask-composite: intersect;
     }
-    @keyframes floatY {
-        0%   { transform: translateY(0px) rotate(-4deg); }
-        50%  { transform: translateY(-26px) rotate(4deg); }
-        100% { transform: translateY(0px) rotate(-4deg); }
+    .food-float.right {
+        right: 0;
+        background: url('https://images.unsplash.com/photo-1526823127573-0fda76b6c24f?w=600&q=60&auto=format&fit=crop') center/cover no-repeat;
+        -webkit-mask-image:
+            linear-gradient(to left, black 0%, transparent 100%),
+            linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
+        -webkit-mask-composite: source-in;
+        mask-image:
+            linear-gradient(to left, black 0%, transparent 100%),
+            linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
+        mask-composite: intersect;
     }
+    .food-float::after {
+        content: ""; position: absolute; inset: 0;
+        background: linear-gradient(180deg, rgba(8,10,19,0.55), rgba(8,10,19,0.72));
+        backdrop-filter: grayscale(25%);
+    }
+    .food-float span { display: none; }
 
     /* ---------- App background ---------- */
     .stApp {

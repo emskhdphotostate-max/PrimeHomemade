@@ -20,46 +20,48 @@ def init_supabase() -> Client:
 
 supabase = init_supabase()
 
-st.set_page_config(page_title="Homemade Kitchen | Fine Home Dining", layout="wide", page_icon="🥂", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Homemade Kitchen | Order & Eat", layout="wide", page_icon="🍔", initial_sidebar_state="collapsed")
 
 # ============================================================
-# CSS — VIP / PREMIUM THEME
+# CSS — DARK / YELLOW FOOD-DELIVERY APP THEME
 # ============================================================
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap');
 
     :root {
-        --gold: #cda86a;
-        --gold-light: #e6cd9a;
-        --gold-deep: #a9833f;
-        --wine: #6e1423;
-        --ink: #0a0a0c;
-        --panel: #131217;
-        --panel-2: #17151b;
-        --line: rgba(205,168,106,0.18);
-        --text: #f3ecdd;
-        --text-dim: #a79c8a;
+        --yellow: #FFC839;
+        --yellow-light: #FFDB77;
+        --yellow-deep: #F5A623;
+        --navy: #0B0E1B;
+        --panel: #141A2E;
+        --panel-2: #1B2238;
+        --line: rgba(255,200,57,0.16);
+        --text: #F4F6FB;
+        --text-dim: #8B93A7;
+        --blue: #4DA3FF;
+        --green: #3ECF8E;
+        --ink: #1A1408;
     }
 
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-    h1, h2, h3, h4, h5, h6 { font-family: 'Playfair Display', serif !important; letter-spacing: 0.2px; }
+    h1, h2, h3, h4, h5, h6 { font-family: 'Poppins', sans-serif !important; letter-spacing: 0.2px; }
 
     /* ---------- Streamlit's own top toolbar: make it blend with dark theme ---------- */
     header[data-testid="stHeader"] {
-        background: #0a0910 !important;
+        background: var(--navy) !important;
         box-shadow: none !important;
-        border-bottom: 1px solid rgba(205,168,106,0.12);
+        border-bottom: 1px solid var(--line);
     }
     header[data-testid="stHeader"] * { color: var(--text) !important; fill: var(--text) !important; }
     div[data-testid="stToolbar"] { color: var(--text) !important; }
-    div[data-testid="stDecoration"] { background: linear-gradient(90deg, var(--gold-deep), var(--gold-light), var(--gold-deep)) !important; }
+    div[data-testid="stDecoration"] { background: linear-gradient(90deg, var(--yellow-deep), var(--yellow-light), var(--yellow-deep)) !important; }
     #MainMenu { color: var(--text) !important; }
 
     /* Give enough clearance below the fixed header so nothing hides behind it */
     .block-container { padding-top: 5.5rem !important; max-width: 1200px; position: relative; z-index: 1; }
 
-    /* ---------- Floating decorative food icons in the empty side gutters ---------- */
+    /* ---------- Floating decorative food icons in the empty side gutters (desktop only) ---------- */
     .food-float {
         position: fixed; top: 0; height: 100vh; width: 90px;
         pointer-events: none; z-index: 0; overflow: hidden;
@@ -67,8 +69,8 @@ st.markdown("""
     .food-float.left { left: 0; }
     .food-float.right { right: 0; }
     .food-float span {
-        position: absolute; font-size: 1.9rem; opacity: 0.16;
-        filter: grayscale(15%) drop-shadow(0 0 6px rgba(205,168,106,0.25));
+        position: absolute; font-size: 1.9rem; opacity: 0.14;
+        filter: drop-shadow(0 0 6px rgba(255,200,57,0.25));
         animation: floatY 9s ease-in-out infinite;
     }
     @keyframes floatY {
@@ -80,39 +82,31 @@ st.markdown("""
     /* ---------- App background ---------- */
     .stApp {
         background:
-            radial-gradient(1100px 550px at 12% -6%, rgba(205,168,106,0.09), transparent 55%),
-            radial-gradient(900px 500px at 100% 0%, rgba(110,20,35,0.16), transparent 50%),
-            linear-gradient(180deg, #08070a 0%, #0d0c10 55%, #0a0910 100%);
+            radial-gradient(1000px 520px at 10% -8%, rgba(255,200,57,0.10), transparent 55%),
+            radial-gradient(900px 480px at 100% 0%, rgba(77,163,255,0.08), transparent 50%),
+            linear-gradient(180deg, #080a13 0%, #0b0e1b 55%, #090b15 100%);
         color: var(--text) !important;
     }
     h1, h2, h3, h4, h5, h6, p, span, label, div { color: var(--text); }
 
-    ::selection { background: rgba(205,168,106,0.35); }
+    ::selection { background: rgba(255,200,57,0.35); }
 
     /* ---------- Hide default sidebar (we use a top navbar) ---------- */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #100e12, #17121a) !important;
+        background: linear-gradient(180deg, #0e1120, #141a2e) !important;
         border-right: 1px solid var(--line);
     }
 
-    /* ---------- Top navbar ---------- */
-    .vip-topbar {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 14px 26px;
-        margin: -1rem -1rem 22px -1rem;
-        background: linear-gradient(180deg, rgba(19,18,23,0.95), rgba(15,14,18,0.85));
-        border-bottom: 1px solid var(--line);
-        backdrop-filter: blur(6px);
-    }
+    /* ---------- Top navbar / brand ---------- */
     .vip-brand { display:flex; align-items:center; gap:12px; }
     .vip-brand .mark {
-        width: 42px; height: 42px; border-radius: 50%;
+        width: 44px; height: 44px; border-radius: 14px;
         display:flex; align-items:center; justify-content:center;
-        background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
-        color: #1a1408 !important; font-size: 20px; font-weight:800;
-        box-shadow: 0 0 0 1px rgba(205,168,106,0.4), 0 6px 18px rgba(205,168,106,0.25);
+        background: linear-gradient(135deg, var(--yellow-light), var(--yellow-deep));
+        color: var(--ink) !important; font-size: 21px; font-weight:800;
+        box-shadow: 0 0 0 1px rgba(255,200,57,0.4), 0 6px 18px rgba(255,200,57,0.25);
     }
-    .vip-brand .name { font-family:'Playfair Display', serif; font-size: 1.35rem; font-weight:800; color: var(--gold-light) !important; line-height:1.1; }
+    .vip-brand .name { font-family:'Poppins', sans-serif; font-size: 1.35rem; font-weight:800; color: var(--yellow-light) !important; line-height:1.1; }
     .vip-brand .tag { font-size: 0.68rem; letter-spacing: 2.5px; text-transform: uppercase; color: var(--text-dim) !important; }
 
     /* Segmented nav (built from a horizontal radio) */
@@ -125,44 +119,43 @@ st.markdown("""
         border-radius: 999px !important; padding: 6px 16px !important; margin:0 !important;
         transition: background .18s ease; cursor:pointer;
     }
-    div[role="radiogroup"] label:hover { background: rgba(205,168,106,0.1); }
+    div[role="radiogroup"] label:hover { background: rgba(255,200,57,0.1); }
     div[role="radiogroup"] label p {
         font-size: 0.85rem !important; font-weight:600 !important; letter-spacing:.3px;
         color: var(--text-dim) !important;
     }
     div[role="radiogroup"] input:checked + div svg,
-    div[role="radiogroup"] [aria-checked="true"] svg { fill: var(--gold) !important; }
-    div[role="radiogroup"] label:has(input:checked) { background: rgba(205,168,106,0.16); }
-    div[role="radiogroup"] label:has(input:checked) p { color: var(--gold-light) !important; }
+    div[role="radiogroup"] [aria-checked="true"] svg { fill: var(--yellow) !important; }
+    div[role="radiogroup"] label:has(input:checked) { background: rgba(255,200,57,0.18); }
+    div[role="radiogroup"] label:has(input:checked) p { color: var(--yellow-light) !important; }
 
-    /* ---------- Hero banner ---------- */
+    /* ---------- Hero banner (bright yellow promo card, like "Hungry? Order & Eat") ---------- */
     .hero-banner {
         position: relative; overflow:hidden;
         background:
-            radial-gradient(600px 260px at 85% -20%, rgba(205,168,106,0.25), transparent 60%),
-            linear-gradient(135deg, #1a1620 0%, #241119 60%, #1a1620 100%);
-        border: 1px solid var(--line);
+            radial-gradient(650px 280px at 85% -30%, rgba(255,255,255,0.25), transparent 60%),
+            linear-gradient(135deg, #FFDB77 0%, #FFC839 55%, #F5A623 100%);
+        border: none;
         padding: 46px 32px;
-        border-radius: 20px;
+        border-radius: 24px;
         text-align: center;
         margin-bottom: 30px;
-        box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+        box-shadow: 0 20px 50px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.08) inset;
     }
     .hero-eyebrow {
         display:inline-block; font-size:0.7rem; letter-spacing:4px; text-transform:uppercase;
-        color: var(--gold-light) !important; margin-bottom:10px; font-weight:600;
+        color: var(--ink) !important; opacity: 0.75; margin-bottom:10px; font-weight:700;
     }
     .hero-banner h1 {
-        font-size: 2.6rem; font-weight: 800; margin: 0 0 10px 0;
-        background: linear-gradient(135deg, #fff, var(--gold-light) 60%, var(--gold-deep));
-        -webkit-background-clip: text; background-clip:text; -webkit-text-fill-color: transparent;
+        font-size: 2.6rem; font-weight: 900; margin: 0 0 10px 0;
+        color: var(--ink) !important; -webkit-text-fill-color: var(--ink);
     }
-    .hero-banner p { font-weight: 400; color: var(--text-dim) !important; font-size:0.98rem; margin: 4px 0; }
-    .hero-divider { width:64px; height:2px; margin:16px auto; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
+    .hero-banner p { font-weight: 600; color: #3a2e08 !important; font-size:0.98rem; margin: 4px 0; }
+    .hero-divider { width:64px; height:3px; margin:16px auto; background: rgba(26,20,8,0.35); border-radius: 3px; }
 
     /* ---------- Section labels ---------- */
     .section-label {
-        font-family:'Playfair Display', serif; font-size:1.4rem; font-weight:700;
+        font-family:'Poppins', sans-serif; font-size:1.35rem; font-weight:700;
         color: var(--text) !important; margin: 6px 0 16px 0;
         display:flex; align-items:center; gap:10px;
     }
@@ -170,52 +163,52 @@ st.markdown("""
 
     /* ---------- Card style for menu items ---------- */
     .menu-card {
-        background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015));
+        background: linear-gradient(180deg, var(--panel-2), var(--panel));
         border: 1px solid var(--line);
-        border-radius: 16px;
+        border-radius: 20px;
         padding: 18px;
         margin-bottom: 18px;
         transition: transform 0.18s ease, box-shadow 0.18s ease, border-color .18s ease;
     }
     .menu-card:hover {
         transform: translateY(-3px);
-        box-shadow: 0 14px 30px rgba(0,0,0,0.45);
-        border-color: rgba(205,168,106,0.55);
+        box-shadow: 0 14px 30px rgba(0,0,0,0.5);
+        border-color: rgba(255,200,57,0.55);
     }
-    .menu-card img { border-radius: 12px !important; }
-    .dish-name { font-family:'Playfair Display', serif; font-size:1.18rem; font-weight:700; margin: 2px 0 4px 0; color: var(--text) !important; }
+    .menu-card img { border-radius: 14px !important; }
+    .dish-name { font-family:'Poppins', sans-serif; font-size:1.12rem; font-weight:700; margin: 2px 0 4px 0; color: var(--text) !important; }
     .dish-desc { color: var(--text-dim) !important; font-size:0.87rem; line-height:1.5; min-height: 2.6em; }
 
     .price-badge {
         display: inline-block;
-        background: transparent;
-        border: 1px solid var(--gold);
-        color: var(--gold-light) !important;
-        font-weight: 700;
-        letter-spacing: .3px;
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 0.92rem;
+        background: rgba(255,200,57,0.12);
+        border: none;
+        color: var(--yellow) !important;
+        font-weight: 800;
+        letter-spacing: .2px;
+        padding: 5px 16px;
+        border-radius: 999px;
+        font-size: 0.98rem;
     }
 
-    /* ---------- Buttons ---------- */
+    /* ---------- Buttons (solid yellow pill, like "Place Order") ---------- */
     .stButton button, div.stFormSubmitButton > button {
-        background: linear-gradient(135deg, var(--gold-light), var(--gold-deep)) !important;
-        color: #1a1408 !important;
-        font-weight: 700 !important;
+        background: linear-gradient(135deg, var(--yellow-light), var(--yellow-deep)) !important;
+        color: var(--ink) !important;
+        font-weight: 800 !important;
         letter-spacing: .3px;
         border: none !important;
-        border-radius: 10px !important;
-        padding: 0.6rem 1.2rem !important;
-        box-shadow: 0 6px 16px rgba(205,168,106,0.25) !important;
+        border-radius: 999px !important;
+        padding: 0.6rem 1.3rem !important;
+        box-shadow: 0 8px 18px rgba(255,200,57,0.3) !important;
         transition: all 0.15s ease !important;
     }
     .stButton button:hover, div.stFormSubmitButton > button:hover {
         transform: translateY(-1px);
-        box-shadow: 0 8px 20px rgba(205,168,106,0.4) !important;
-        filter: brightness(1.05);
+        box-shadow: 0 10px 22px rgba(255,200,57,0.45) !important;
+        filter: brightness(1.04);
     }
-    .stButton button p, div.stFormSubmitButton > button p { color: #1a1408 !important; font-weight:700 !important; }
+    .stButton button p, div.stFormSubmitButton > button p { color: var(--ink) !important; font-weight:800 !important; }
 
     /* Logout / secondary look for the small top-right button */
     section.main div[data-testid="stVerticalBlock"] div[data-testid="column"]:last-child .stButton button {
@@ -223,6 +216,7 @@ st.markdown("""
         color: var(--text) !important;
         border: 1px solid var(--line) !important;
         box-shadow: none !important;
+        border-radius: 10px !important;
     }
 
     /* ---------- Inputs (kept solid white with dark text for guaranteed readability
@@ -235,12 +229,12 @@ st.markdown("""
         color: #14120f !important;
         background-color: #ffffff !important;
         border: 1px solid var(--line) !important;
-        border-radius: 8px !important;
+        border-radius: 12px !important;
         caret-color: #14120f !important;
     }
     input::placeholder, textarea::placeholder { color: #8a8378 !important; opacity: 1 !important; }
     .stTextInput input:focus, .stTextArea textarea:focus, .stNumberInput input:focus {
-        border-color: var(--gold) !important; box-shadow: 0 0 0 1px var(--gold) !important;
+        border-color: var(--yellow) !important; box-shadow: 0 0 0 1px var(--yellow) !important;
     }
 
     /* Selectbox / dropdown — closed control */
@@ -249,7 +243,7 @@ st.markdown("""
         color: #14120f !important;
         background-color: #ffffff !important;
         border: 1px solid var(--line) !important;
-        border-radius: 8px !important;
+        border-radius: 12px !important;
     }
     .stSelectbox div[data-baseweb="select"] * { color: #14120f !important; fill: #14120f !important; }
 
@@ -265,71 +259,93 @@ st.markdown("""
         background-color: #ffffff !important;
     }
     div[data-baseweb="popover"] li:hover {
-        background-color: rgba(205,168,106,0.18) !important;
+        background-color: rgba(255,200,57,0.18) !important;
     }
 
     label p { color: var(--text-dim) !important; font-size:0.83rem !important; font-weight:600 !important; }
 
     /* ---------- KPI metric cards ---------- */
     div[data-testid="stMetric"] {
-        background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015));
+        background: linear-gradient(180deg, var(--panel-2), var(--panel));
         border: 1px solid var(--line);
-        border-radius: 14px;
+        border-radius: 16px;
         padding: 16px 18px;
     }
-    div[data-testid="stMetricValue"] { color: var(--gold-light) !important; font-family:'Playfair Display', serif; }
+    div[data-testid="stMetricValue"] { color: var(--yellow-light) !important; font-family:'Poppins', sans-serif; }
     div[data-testid="stMetricLabel"] { color: var(--text-dim) !important; }
 
     /* ---------- Tabs ---------- */
     button[data-baseweb="tab"] { font-weight:600 !important; color: var(--text-dim) !important; }
-    button[data-baseweb="tab"][aria-selected="true"] { color: var(--gold-light) !important; }
-    div[data-baseweb="tab-highlight"] { background-color: var(--gold) !important; }
+    button[data-baseweb="tab"][aria-selected="true"] { color: var(--yellow-light) !important; }
+    div[data-baseweb="tab-highlight"] { background-color: var(--yellow) !important; }
     div[data-baseweb="tab-border"] { background-color: var(--line) !important; }
 
     /* ---------- Status badges ---------- */
     .badge {
         display: inline-block;
         padding: 3px 13px;
-        border-radius: 20px;
+        border-radius: 999px;
         font-weight: 700;
         font-size: 0.72rem;
         letter-spacing: .4px;
         text-transform: uppercase;
         vertical-align: middle;
     }
-    .badge-new { background: rgba(205,168,106,0.18); color: var(--gold-light) !important; border:1px solid var(--gold); }
-    .badge-preparing { background: rgba(212,159,58,0.16); color: #e0b158 !important; border:1px solid #d49f3a; }
-    .badge-delivery { background: rgba(74,144,196,0.16); color: #7fb8e8 !important; border:1px solid #4a90c4; }
-    .badge-completed { background: rgba(60,140,100,0.16); color: #6fcf9c !important; border:1px solid #3c8c64; }
+    .badge-new { background: rgba(255,200,57,0.18); color: var(--yellow-light) !important; border:1px solid var(--yellow); }
+    .badge-preparing { background: rgba(245,166,35,0.16); color: #ffb85c !important; border:1px solid #f5a623; }
+    .badge-delivery { background: rgba(77,163,255,0.16); color: #8fc2ff !important; border:1px solid var(--blue); }
+    .badge-completed { background: rgba(62,207,142,0.16); color: #7fe6b6 !important; border:1px solid var(--green); }
 
     @keyframes glow {
-        0% { box-shadow: 0 0 0 0 rgba(205,168,106,0.35); }
-        50% { box-shadow: 0 0 0 8px rgba(205,168,106,0); }
-        100% { box-shadow: 0 0 0 0 rgba(205,168,106,0); }
+        0% { box-shadow: 0 0 0 0 rgba(255,200,57,0.35); }
+        50% { box-shadow: 0 0 0 8px rgba(255,200,57,0); }
+        100% { box-shadow: 0 0 0 0 rgba(255,200,57,0); }
     }
     .blink-box {
         padding: 18px;
-        border-radius: 14px;
+        border-radius: 18px;
         animation: glow 1.8s infinite;
-        border: 1px solid var(--gold);
-        background: linear-gradient(180deg, rgba(205,168,106,0.06), rgba(255,255,255,0.02));
+        border: 1px solid var(--yellow);
+        background: linear-gradient(180deg, rgba(255,200,57,0.08), var(--panel));
     }
 
     /* ---------- Login card ---------- */
     .login-wrap { max-width: 420px; margin: 30px auto 0 auto; }
     .login-card {
-        background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
-        border: 1px solid var(--line); border-radius: 18px; padding: 34px 30px 8px 30px;
-        text-align:center; box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+        background: linear-gradient(180deg, var(--panel-2), var(--panel));
+        border: 1px solid var(--line); border-radius: 22px; padding: 34px 30px 8px 30px;
+        text-align:center; box-shadow: 0 20px 50px rgba(0,0,0,0.45);
     }
     .login-card .mark {
-        width:56px; height:56px; border-radius:50%; margin: 0 auto 14px auto;
+        width:56px; height:56px; border-radius:16px; margin: 0 auto 14px auto;
         display:flex; align-items:center; justify-content:center; font-size:26px;
-        background: linear-gradient(135deg, var(--gold-light), var(--gold-deep)); color:#1a1408;
+        background: linear-gradient(135deg, var(--yellow-light), var(--yellow-deep)); color: var(--ink);
     }
 
     hr { border-color: var(--line) !important; }
     .stCaption, [data-testid="stCaptionContainer"] { color: var(--text-dim) !important; }
+
+    /* ============================================================
+       RESPONSIVE — phones & small tablets
+       ============================================================ */
+    @media (max-width: 768px) {
+        .block-container { padding-top: 4.5rem !important; padding-left: 0.9rem !important; padding-right: 0.9rem !important; }
+        .food-float { display: none; }
+        .vip-brand .name { font-size: 1.1rem; }
+        .vip-brand .mark { width: 38px; height: 38px; font-size: 18px; }
+        .hero-banner { padding: 30px 20px; border-radius: 18px; }
+        .hero-banner h1 { font-size: 1.75rem; }
+        .hero-banner p { font-size: 0.85rem; }
+        .section-label { font-size: 1.15rem; }
+        div[role="radiogroup"] { width: 100%; justify-content: center; }
+        div[role="radiogroup"] label p { font-size: 0.78rem !important; }
+        .menu-card { padding: 14px; border-radius: 16px; }
+        div[data-testid="stMetric"] { padding: 12px 14px; }
+    }
+    @media (max-width: 480px) {
+        .hero-banner h1 { font-size: 1.5rem; }
+        .vip-brand .tag { display: none; }
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -491,10 +507,10 @@ nav_left, nav_right = st.columns([2, 2])
 with nav_left:
     st.markdown("""
         <div class="vip-brand" style="padding-top:6px;">
-            <div class="mark">🥂</div>
+            <div class="mark">🍔</div>
             <div>
                 <div class="name">Homemade Kitchen</div>
-                <div class="tag">Fine Home Dining</div>
+                <div class="tag">Hungry? Order &amp; Eat.</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -513,8 +529,8 @@ st.markdown("<hr style='margin:14px 0 22px 0;'>", unsafe_allow_html=True)
 if portal_mode == "🍽️ Customer Storefront":
     st.markdown("""
         <div class="hero-banner">
-            <span class="hero-eyebrow">✦ Est. in your home kitchen ✦</span>
-            <h1>Homemade Kitchen</h1>
+            <span class="hero-eyebrow">🔥 50% OFF your first order</span>
+            <h1>Hungry? Order &amp; Eat.</h1>
             <div class="hero-divider"></div>
             <p>Fresh, hygienic, and authentic home-cooked meals — plated with care, delivered with pride.</p>
             <p>⏰ Open daily · 9:00 AM – 10:00 PM</p>
@@ -586,12 +602,12 @@ if portal_mode == "🍽️ Customer Storefront":
                 st.markdown(
                     f"<div style='display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--line);'>"
                     f"<span>{details['name']} <span style='color:var(--text-dim);'>× {details['quantity']}</span></span>"
-                    f"<span style='color:var(--gold-light);font-weight:600;'>{fmt(subtotal)}</span></div>",
+                    f"<span style='color:var(--yellow-light);font-weight:700;'>{fmt(subtotal)}</span></div>",
                     unsafe_allow_html=True
                 )
             st.markdown(
-                f"<div style='display:flex;justify-content:space-between;padding-top:14px;font-family:\"Playfair Display\",serif;font-size:1.3rem;font-weight:700;'>"
-                f"<span>Total</span><span style='color:var(--gold-light);'>{fmt(total_bill)}</span></div>",
+                f"<div style='display:flex;justify-content:space-between;padding-top:14px;font-family:\"Poppins\",sans-serif;font-size:1.3rem;font-weight:800;'>"
+                f"<span>Total</span><span style='color:var(--yellow-light);'>{fmt(total_bill)}</span></div>",
                 unsafe_allow_html=True
             )
             st.markdown('</div>', unsafe_allow_html=True)
@@ -644,7 +660,7 @@ elif portal_mode == "🔐 Admin Management Panel":
             <div class="login-wrap">
                 <div class="login-card">
                     <div class="mark">🔐</div>
-                    <h2 style="margin-bottom:2px;">Admin Access</h2>
+                    <h2 style="margin-bottom:2px;color:var(--yellow-light) !important;">Admin Access</h2>
                     <p style="color:var(--text-dim);font-size:0.88rem;margin-top:0;">Sign in to manage your kitchen</p>
         """, unsafe_allow_html=True)
         with st.form("admin_login_form"):

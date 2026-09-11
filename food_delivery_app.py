@@ -109,26 +109,6 @@ st.markdown("""
     .vip-brand .name { font-family:'Poppins', sans-serif; font-size: 1.35rem; font-weight:800; color: var(--yellow-light) !important; line-height:1.1; }
     .vip-brand .tag { font-size: 0.68rem; letter-spacing: 2.5px; text-transform: uppercase; color: var(--text-dim) !important; }
 
-    /* Segmented nav (built from a horizontal radio) */
-    div[data-testid="stRadio"] { background: transparent; }
-    div[role="radiogroup"] {
-        display:flex; gap:4px; flex-wrap: wrap; background: rgba(255,255,255,0.035);
-        border: 1px solid var(--line); border-radius: 999px; padding: 6px;
-    }
-    div[role="radiogroup"] label {
-        border-radius: 999px !important; padding: 6px 16px !important; margin:0 !important;
-        transition: background .18s ease; cursor:pointer;
-    }
-    div[role="radiogroup"] label:hover { background: rgba(255,200,57,0.1); }
-    div[role="radiogroup"] label p {
-        font-size: 0.85rem !important; font-weight:600 !important; letter-spacing:.3px;
-        color: var(--text-dim) !important;
-    }
-    div[role="radiogroup"] input:checked + div svg,
-    div[role="radiogroup"] [aria-checked="true"] svg { fill: var(--yellow) !important; }
-    div[role="radiogroup"] label:has(input:checked) { background: rgba(255,200,57,0.18); }
-    div[role="radiogroup"] label:has(input:checked) p { color: var(--yellow-light) !important; }
-
     /* ---------- Hero banner (bright yellow promo card, like "Hungry? Order & Eat") ---------- */
     .hero-banner {
         position: relative; overflow:hidden;
@@ -325,6 +305,77 @@ st.markdown("""
     hr { border-color: var(--line) !important; }
     .stCaption, [data-testid="stCaptionContainer"] { color: var(--text-dim) !important; }
 
+    /* ---------- Pills / segmented controls (nav switch + category filter) ---------- */
+    div[data-testid="stButtonGroup"] [data-testid="stWidgetLabel"] { display: none !important; }
+    div[data-testid="stButtonGroup"] > div:last-child {
+        gap: 6px !important; flex-wrap: wrap;
+        background: rgba(255,255,255,0.035);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 6px;
+    }
+    div[data-testid="stButtonGroup"] [data-variant="pills"] {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 999px !important;
+        color: var(--text-dim) !important;
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+        padding: 7px 18px !important;
+        transition: all .15s ease !important;
+    }
+    div[data-testid="stButtonGroup"] [data-variant="pills"]:hover {
+        background: rgba(255,200,57,0.12) !important;
+        color: var(--yellow-light) !important;
+    }
+    div[data-testid="stButtonGroup"] [data-variant="pills"][data-selected] {
+        background: linear-gradient(135deg, var(--yellow-light), var(--yellow-deep)) !important;
+        color: var(--ink) !important;
+        box-shadow: 0 4px 14px rgba(255,200,57,0.35) !important;
+    }
+    /* Category filter row wraps onto its own centred pill-track per line */
+    .stButtonGroup { margin-bottom: 20px !important; }
+
+    /* ---------- Quantity stepper (number input) ---------- */
+    div[data-testid="stNumberInput"] [data-testid="stWidgetLabel"] { display: none !important; }
+    div[data-testid="stNumberInputContainer"] {
+        background: var(--panel) !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 999px !important;
+        overflow: hidden;
+        height: 40px !important;
+    }
+    div[data-testid="stNumberInputContainer"] input[data-testid="stNumberInputField"] {
+        background: transparent !important;
+        color: var(--yellow-light) !important;
+        font-weight: 800 !important;
+        text-align: center !important;
+        border: none !important;
+        border-radius: 0 !important;
+    }
+    button[data-testid="stNumberInputStepDown"], button[data-testid="stNumberInputStepUp"] {
+        background: rgba(255,200,57,0.14) !important;
+        border: none !important;
+        color: var(--yellow) !important;
+    }
+    button[data-testid="stNumberInputStepDown"]:hover, button[data-testid="stNumberInputStepUp"]:hover {
+        background: rgba(255,200,57,0.28) !important;
+    }
+
+    /* ---------- Info / success / error / warning boxes ---------- */
+    div[data-testid="stAlertContainer"] {
+        background: var(--panel) !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 16px !important;
+    }
+    div[data-testid="stAlertContainer"] p { color: var(--text) !important; }
+    div[data-testid="stAlertContainer"] svg { fill: var(--yellow) !important; }
+
+    /* ---------- General spacing polish ---------- */
+    div[data-testid="stVerticalBlock"] { gap: 0.9rem; }
+    .stTextInput, .stSelectbox, .stTextArea { margin-bottom: 2px; }
+
     /* ============================================================
        RESPONSIVE — phones & small tablets
        ============================================================ */
@@ -337,8 +388,8 @@ st.markdown("""
         .hero-banner h1 { font-size: 1.75rem; }
         .hero-banner p { font-size: 0.85rem; }
         .section-label { font-size: 1.15rem; }
-        div[role="radiogroup"] { width: 100%; justify-content: center; }
-        div[role="radiogroup"] label p { font-size: 0.78rem !important; }
+        div[data-testid="stButtonGroup"] > div:last-child { width: 100%; justify-content: center; }
+        div[data-testid="stButtonGroup"] [data-variant="pills"] { font-size: 0.78rem !important; padding: 6px 12px !important; }
         .menu-card { padding: 14px; border-radius: 16px; }
         div[data-testid="stMetric"] { padding: 12px 14px; }
     }
@@ -516,9 +567,9 @@ with nav_left:
     """, unsafe_allow_html=True)
 with nav_right:
     st.write("")
-    portal_mode = st.radio(
+    portal_mode = st.pills(
         "Navigate", ["🍽️ Customer Storefront", "🔐 Admin Management Panel"],
-        horizontal=True, label_visibility="collapsed"
+        default="🍽️ Customer Storefront", required=True, label_visibility="collapsed", key="portal_nav"
     )
 st.markdown(f"<div style='text-align:right; margin-top:-8px;'><span class='stCaption'>📅 {datetime.now().strftime('%A, %d %b %Y')}</span></div>", unsafe_allow_html=True)
 st.markdown("<hr style='margin:14px 0 22px 0;'>", unsafe_allow_html=True)
@@ -559,9 +610,11 @@ if portal_mode == "🍽️ Customer Storefront":
             with cols[1]:
                 st.markdown(f'<div class="dish-name">{item["item_name"]}</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="dish-desc">{item.get("description", "Freshly prepared meal")}</div>', unsafe_allow_html=True)
-                st.markdown(f'<span class="price-badge">Rs. {item["price"]}</span>', unsafe_allow_html=True)
-                st.write("")
-                qty = st.number_input("Quantity", 0, 10, 0, key=f"item_qty_{item['id']}", label_visibility="collapsed")
+                price_col, qty_col = st.columns([1, 1])
+                with price_col:
+                    st.markdown(f'<span class="price-badge">Rs. {item["price"]}</span>', unsafe_allow_html=True)
+                with qty_col:
+                    qty = st.number_input("Quantity", 0, 10, 0, key=f"item_qty_{item['id']}", label_visibility="collapsed")
                 if qty > 0:
                     st.session_state.cart[item["id"]] = {
                         "name": item["item_name"], "price": item["price"], "quantity": qty
@@ -574,8 +627,9 @@ if portal_mode == "🍽️ Customer Storefront":
         # (never duplicated across categories), so there's no risk of duplicate
         # widget keys or the cart quantity getting out of sync.
         cat_options = ["✨ All"] + [f"{CATEGORY_ICONS.get(c, '🍴')} {c}" for c in CATEGORIES]
-        cat_choice = st.radio(
-            "Category filter", cat_options, horizontal=True, label_visibility="collapsed", key="menu_category_filter"
+        cat_choice = st.pills(
+            "Category filter", cat_options, default="✨ All", required=True,
+            label_visibility="collapsed", key="menu_category_filter"
         )
 
         if cat_choice == "✨ All":
